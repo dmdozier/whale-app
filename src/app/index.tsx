@@ -1,14 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-} from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, TextInput } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -75,89 +68,81 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled">
-        <SafeAreaView style={styles.safeArea}>
-          <ThemedView style={styles.container}>
-            <ThemedText type="title" style={styles.titleEmoji}>
-              🐋
-            </ThemedText>
-            <ThemedText type="subtitle" style={styles.heading}>
-              Whale Sightings
-            </ThemedText>
+      contentContainerStyle={styles.scrollContent}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={Spacing.four}>
+      <SafeAreaView style={styles.safeArea}>
+        <ThemedView style={styles.container}>
+          <ThemedText type="title" style={styles.titleEmoji}>
+            🐋
+          </ThemedText>
+          <ThemedText type="subtitle" style={styles.heading}>
+            Whale Sightings
+          </ThemedText>
 
-            <ThemedView type="backgroundElement" style={styles.form}>
-              <TextInput
-                style={[
-                  styles.input,
-                  { color: theme.text, borderColor: theme.backgroundSelected },
-                ]}
-                placeholder="Email"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <TextInput
-                style={[
-                  styles.input,
-                  { color: theme.text, borderColor: theme.backgroundSelected },
-                ]}
-                placeholder="Password"
-                placeholderTextColor={theme.textSecondary}
-                autoComplete={mode === 'signIn' ? 'password' : 'new-password'}
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
+          <ThemedView type="backgroundElement" style={styles.form}>
+            <TextInput
+              style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+              placeholder="Email"
+              placeholderTextColor={theme.textSecondary}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TextInput
+              style={[styles.input, { color: theme.text, borderColor: theme.backgroundSelected }]}
+              placeholder="Password"
+              placeholderTextColor={theme.textSecondary}
+              autoComplete={mode === 'signIn' ? 'password' : 'new-password'}
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+            />
 
-              {error ? (
-                <ThemedText type="small" style={styles.errorText}>
-                  {error}
+            {error ? (
+              <ThemedText type="small" style={styles.errorText}>
+                {error}
+              </ThemedText>
+            ) : null}
+            {info ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {info}
+              </ThemedText>
+            ) : null}
+
+            <Pressable
+              style={[styles.primaryButton, submitting && styles.disabledButton]}
+              onPress={submit}
+              disabled={submitting}>
+              {submitting ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <ThemedText style={styles.primaryButtonText}>
+                  {mode === 'signIn' ? 'Log In' : 'Sign Up'}
                 </ThemedText>
-              ) : null}
-              {info ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {info}
-                </ThemedText>
-              ) : null}
+              )}
+            </Pressable>
 
-              <Pressable
-                style={[styles.primaryButton, submitting && styles.disabledButton]}
-                onPress={submit}
-                disabled={submitting}>
-                {submitting ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <ThemedText style={styles.primaryButtonText}>
-                    {mode === 'signIn' ? 'Log In' : 'Sign Up'}
-                  </ThemedText>
-                )}
-              </Pressable>
-
-              <Pressable
-                onPress={() => {
-                  setMode(mode === 'signIn' ? 'signUp' : 'signIn');
-                  setError(null);
-                  setInfo(null);
-                }}>
-                <ThemedText type="link" themeColor="textSecondary" style={styles.centerText}>
-                  {mode === 'signIn'
-                    ? "Don't have an account? Sign up"
-                    : 'Already have an account? Log in'}
-                </ThemedText>
-              </Pressable>
-            </ThemedView>
+            <Pressable
+              onPress={() => {
+                setMode(mode === 'signIn' ? 'signUp' : 'signIn');
+                setError(null);
+                setInfo(null);
+              }}>
+              <ThemedText type="link" themeColor="textSecondary" style={styles.centerText}>
+                {mode === 'signIn'
+                  ? "Don't have an account? Sign up"
+                  : 'Already have an account? Log in'}
+              </ThemedText>
+            </Pressable>
           </ThemedView>
-        </SafeAreaView>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ThemedView>
+      </SafeAreaView>
+    </KeyboardAwareScrollView>
   );
 }
 
