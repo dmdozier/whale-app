@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -10,6 +11,7 @@ export default function MapScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <LogoutButton />
         <ThemedText type="title" style={styles.placeholder}>
           🗺️
         </ThemedText>

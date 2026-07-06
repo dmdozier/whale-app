@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 
 const SPECIES_OPTIONS = [
@@ -21,8 +22,17 @@ const SPECIES_OPTIONS = [
 
 export default function LogSightingScreen() {
   const theme = useTheme();
+  const { session, initializing } = useAuth();
   const [species, setSpecies] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+
+  if (initializing) {
+    return null;
+  }
+
+  if (!session) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <ThemedView style={styles.container}>

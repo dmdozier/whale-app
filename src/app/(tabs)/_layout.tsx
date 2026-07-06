@@ -1,11 +1,21 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Text, useColorScheme } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function TabLayout() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const { session, initializing } = useAuth();
+
+  if (initializing) {
+    return null;
+  }
+
+  if (!session) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <Tabs
