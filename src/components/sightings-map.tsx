@@ -1,3 +1,5 @@
+import * as Location from 'expo-location';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 
@@ -12,8 +14,32 @@ const DEFAULT_REGION: Region = {
 };
 
 export function SightingsMap({ sightings }: { sightings: Sighting[] }) {
+  const mapRef = useRef<MapView>(null);
+
+  // Center and zoom to the user's current location on open. If permission
+  // isn't granted or the location can't be resolved, the map just stays on
+  // DEFAULT_REGION instead of blocking or erroring.
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({});
+      mapRef.current?.animateToRegion(
+        {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        },
+        700,
+      );
+    })().catch(() => {});
+  }, []);
+
   return (
-    <MapView style={styles.map} initialRegion={DEFAULT_REGION} showsUserLocation>
+    <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} showsUserLocation>
       {sightings.map((sighting) => {
         const recent = isRecentSighting(sighting.sighted_at);
         return (
