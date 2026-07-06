@@ -1,25 +1,35 @@
-import { router } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LogoutButton } from '@/components/logout-button';
+import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import type { Sighting } from '@/types/sighting';
 
 export default function MapScreen() {
+  const [sightings, setSightings] = useState<Sighting[]>([]);
+
+  // Refetch whenever the Map tab gains focus, so a sighting just logged
+  // (or logged by someone else) shows up without needing to restart the app.
+  useFocusEffect(
+    useCallback(() => {
+      supabase
+        .from('sightings')
+        .select('id, latitude, longitude, sighted_at, notes, species(common_name)')
+        .order('sighted_at', { ascending: false })
+        .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
+    }, []),
+  );
+
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <LogoutButton />
-        <ThemedText type="title" style={styles.placeholder}>
-          🗺️
-        </ThemedText>
-        <ThemedText type="subtitle">Map</ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.centerText}>
-          Sighting pins will show up here once the map is wired up.
-        </ThemedText>
-      </SafeAreaView>
+      <SightingsMap sightings={sightings} />
+
+      <LogoutButton />
 
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
@@ -31,20 +41,6 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
-  },
-  placeholder: {
-    fontSize: 56,
-    lineHeight: 64,
-  },
-  centerText: {
-    textAlign: 'center',
   },
   fab: {
     position: 'absolute',
