@@ -1,29 +1,121 @@
-import { router } from 'expo-router';
-import { Pressable, StyleSheet } from 'react-native';
+import * as Location from 'expo-location';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { FlatList, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
+import { formatRelativeTime } from '@/lib/sighting-time';
+import { supabase } from '@/lib/supabase';
+import type { Sighting } from '@/types/sighting';
 
 export default function ListScreen() {
+  const [sightings, setSightings] = useState<Sighting[]>([]);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
+    null,
+  );
+  const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
+
+  // Refetch whenever the List tab gains focus, so a sighting just logged
+  // (or logged by someone else) shows up without needing to restart the app.
+  useFocusEffect(
+    useCallback(() => {
+      supabase
+        .from('sightings')
+        .select('id, latitude, longitude, sighted_at, notes, species(common_name)')
+        .order('sighted_at', { ascending: false })
+        .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
+    }, []),
+  );
+
+  // Used only for the "rough distance away" hint on each row — if permission
+  // is denied or location can't be resolved, rows just omit the distance.
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({});
+      setUserLocation({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    })().catch(() => {});
+  }, []);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <LogoutButton />
-        <ThemedText type="title" style={styles.placeholder}>
-          📋
-        </ThemedText>
-        <ThemedText type="subtitle">Recent Sightings</ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.centerText}>
-          No sightings yet. Once syncing is wired up, recent sightings will be listed here.
-        </ThemedText>
+        <FlatList
+          data={sightings}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <ThemedView style={styles.emptyState}>
+              <ThemedText type="title" style={styles.emptyEmoji}>
+                📋
+              </ThemedText>
+              <ThemedText type="subtitle">Recent Sightings</ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.centerText}>
+                No sightings yet.
+              </ThemedText>
+            </ThemedView>
+          }
+          renderItem={({ item }) => {
+            const distanceLabel = userLocation
+              ? formatDistanceMiles(distanceInMiles(userLocation, item))
+              : null;
+            return (
+              <Pressable onPress={() => setSelectedSighting(item)}>
+                <ThemedView type="backgroundElement" style={styles.row}>
+                  <ThemedText type="smallBold">
+                    {item.species?.common_name ?? 'Species not noted'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {formatRelativeTime(item.sighted_at)}
+                    {distanceLabel ? ` · ${distanceLabel}` : ''}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+            );
+          }}
+        />
       </SafeAreaView>
+
+      <LogoutButton />
 
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
       </Pressable>
+
+      <Modal
+        visible={selectedSighting !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedSighting(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedSighting(null)}>
+          {selectedSighting ? (
+            <ThemedView type="backgroundElement" style={styles.modalCard}>
+              <ThemedText type="smallBold">
+                {selectedSighting.species?.common_name ?? 'Species not noted'}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                {formatRelativeTime(selectedSighting.sighted_at)}
+              </ThemedText>
+              {selectedSighting.notes ? (
+                <ThemedText type="small" style={styles.modalNotes}>
+                  {selectedSighting.notes}
+                </ThemedText>
+              ) : null}
+            </ThemedView>
+          ) : null}
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -34,17 +126,30 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  listContent: {
+    flexGrow: 1,
+    padding: Spacing.four,
+    paddingBottom: Spacing.six + Spacing.four,
+    gap: Spacing.two,
+  },
+  emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.four,
   },
-  placeholder: {
+  emptyEmoji: {
     fontSize: 56,
     lineHeight: 64,
   },
   centerText: {
     textAlign: 'center',
+  },
+  row: {
+    borderRadius: Spacing.two,
+    padding: Spacing.three,
+    gap: 2,
   },
   fab: {
     position: 'absolute',
@@ -58,5 +163,22 @@ const styles = StyleSheet.create({
   fabText: {
     color: '#ffffff',
     fontWeight: '600',
+  },
+  modalBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    padding: Spacing.four,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 320,
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    gap: Spacing.one,
+  },
+  modalNotes: {
+    marginTop: Spacing.two,
   },
 });
