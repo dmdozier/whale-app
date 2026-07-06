@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { Redirect, router } from 'expo-router';
+import { Redirect, Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, TextInput } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -129,91 +129,108 @@ export default function LogSightingScreen() {
   };
 
   return (
-    <KeyboardAwareScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-      bottomOffset={Spacing.four}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView type="backgroundElement" style={styles.locationCard}>
-          {coords ? (
-            <ThemedText type="smallBold">
-              📍 Location captured ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
-            </ThemedText>
-          ) : locationError ? (
-            <ThemedText type="smallBold" style={styles.errorText}>
-              📍 {locationError}
-            </ThemedText>
-          ) : (
-            <ThemedText type="smallBold">📍 Getting your location…</ThemedText>
-          )}
-        </ThemedView>
+    <>
+      <Stack.Screen
+        options={{
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} hitSlop={8} style={styles.cancelButton}>
+              <ThemedText type="link">Cancel</ThemedText>
+            </Pressable>
+          ),
+        }}
+      />
+      <KeyboardAwareScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={Spacing.four}>
+        <SafeAreaView style={styles.safeArea}>
+          <ThemedView type="backgroundElement" style={styles.locationCard}>
+            {coords ? (
+              <ThemedText type="smallBold">
+                📍 Location captured ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
+              </ThemedText>
+            ) : locationError ? (
+              <ThemedText type="smallBold" style={styles.errorText}>
+                📍 {locationError}
+              </ThemedText>
+            ) : (
+              <ThemedText type="smallBold">📍 Getting your location…</ThemedText>
+            )}
+          </ThemedView>
 
-        <ThemedText type="smallBold" style={styles.label}>
-          Species (optional)
-        </ThemedText>
-        <ThemedView style={styles.chipRow}>
-          {speciesList.map((option) => {
-            const selected = selectedSpeciesId === option.id;
-            return (
-              <Pressable
-                key={option.id}
-                onPress={() => setSelectedSpeciesId(selected ? null : option.id)}
-                style={[
-                  styles.chip,
-                  { backgroundColor: selected ? theme.text : theme.backgroundElement },
-                ]}>
-                <ThemedText type="small" style={{ color: selected ? theme.background : theme.text }}>
-                  {option.common_name}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </ThemedView>
-
-        <ThemedText type="smallBold" style={styles.label}>
-          Notes (optional)
-        </ThemedText>
-        <TextInput
-          style={[styles.notesInput, { color: theme.text, borderColor: theme.backgroundSelected }]}
-          placeholder="Anything else worth noting?"
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          value={notes}
-          onChangeText={setNotes}
-        />
-
-        {photoUri ? <Image source={{ uri: photoUri }} style={styles.photoPreview} /> : null}
-        <Pressable style={styles.photoButton} onPress={takePhoto}>
-          <ThemedText type="link">
-            📷 {photoUri ? 'Retake photo' : 'Attach a photo (optional)'}
+          <ThemedText type="smallBold" style={styles.label}>
+            Species (optional)
           </ThemedText>
-        </Pressable>
+          <ThemedView style={styles.chipRow}>
+            {speciesList.map((option) => {
+              const selected = selectedSpeciesId === option.id;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => setSelectedSpeciesId(selected ? null : option.id)}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: selected ? theme.text : theme.backgroundElement },
+                  ]}>
+                  <ThemedText
+                    type="small"
+                    style={{ color: selected ? theme.background : theme.text }}>
+                    {option.common_name}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ThemedView>
 
-        {saveError ? (
-          <ThemedText type="small" style={styles.errorText}>
-            {saveError}
+          <ThemedText type="smallBold" style={styles.label}>
+            Notes (optional)
           </ThemedText>
-        ) : null}
+          <TextInput
+            style={[styles.notesInput, { color: theme.text, borderColor: theme.backgroundSelected }]}
+            placeholder="Anything else worth noting?"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            value={notes}
+            onChangeText={setNotes}
+          />
 
-        <Pressable
-          style={[styles.saveButton, saving && styles.disabledButton]}
-          onPress={save}
-          disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <ThemedText style={styles.saveButtonText}>Save Sighting</ThemedText>
-          )}
-        </Pressable>
-      </SafeAreaView>
-    </KeyboardAwareScrollView>
+          {photoUri ? <Image source={{ uri: photoUri }} style={styles.photoPreview} /> : null}
+          <Pressable style={styles.photoButton} onPress={takePhoto}>
+            <ThemedText type="link">
+              📷 {photoUri ? 'Retake photo' : 'Attach a photo (optional)'}
+            </ThemedText>
+          </Pressable>
+
+          {saveError ? (
+            <ThemedText type="small" style={styles.errorText}>
+              {saveError}
+            </ThemedText>
+          ) : null}
+
+          <Pressable
+            style={[styles.saveButton, saving && styles.disabledButton]}
+            onPress={save}
+            disabled={saving}>
+            {saving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <ThemedText style={styles.saveButtonText}>Save Sighting</ThemedText>
+            )}
+          </Pressable>
+        </SafeAreaView>
+      </KeyboardAwareScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  cancelButton: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
   },
   scrollContent: {
     flexGrow: 1,
