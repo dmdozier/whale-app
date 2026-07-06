@@ -1,11 +1,18 @@
 import { Pressable, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { supabase } from '@/lib/supabase';
 
 export function LogoutButton() {
+  // Absolutely positioned views ignore a parent SafeAreaView's padding, so
+  // the inset has to be applied directly here to clear the status bar.
+  const insets = useSafeAreaInsets();
+
   return (
-    <Pressable style={styles.button} onPress={() => supabase.auth.signOut()}>
+    <Pressable
+      style={[styles.button, { top: insets.top, right: insets.right }]}
+      onPress={() => supabase.auth.signOut()}>
       <ThemedText type="small" themeColor="textSecondary">
         Log out
       </ThemedText>
@@ -16,8 +23,6 @@ export function LogoutButton() {
 const styles = StyleSheet.create({
   button: {
     position: 'absolute',
-    top: 0,
-    right: 0,
     padding: 16,
     zIndex: 1,
   },
