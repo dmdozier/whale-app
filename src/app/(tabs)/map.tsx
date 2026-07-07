@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DateFilterRow } from '@/components/date-filter-row';
+import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
 import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
@@ -16,7 +16,7 @@ import type { Sighting } from '@/types/sighting';
 
 // Clears the height of the top filter bar so the logout button doesn't
 // overlap it.
-const LOGOUT_BUTTON_OFFSET = 44;
+const LOGOUT_BUTTON_OFFSET = 40;
 
 export default function MapScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
@@ -44,9 +44,7 @@ export default function MapScreen() {
       <SightingsMap sightings={filteredSightings} />
 
       <SafeAreaView edges={['top']} style={styles.filterBarSafeArea}>
-        <ThemedView type="backgroundElement" style={styles.filterBar}>
-          <DateFilterRow value={dateFilter} onChange={setDateFilter} />
-        </ThemedView>
+        <DateFilterButton value={dateFilter} onChange={setDateFilter} />
       </SafeAreaView>
 
       <LogoutButton topOffset={LOGOUT_BUTTON_OFFSET} />
@@ -75,10 +73,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-  },
-  filterBar: {
-    minHeight: 44,
-    justifyContent: 'center',
+    padding: Spacing.three,
   },
   pendingBanner: {
     position: 'absolute',

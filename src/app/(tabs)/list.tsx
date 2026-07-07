@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DateFilterRow } from '@/components/date-filter-row';
+import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -19,7 +19,7 @@ import type { Sighting } from '@/types/sighting';
 
 // Clears the height of the top filter bar so the logout button doesn't
 // overlap it.
-const LOGOUT_BUTTON_OFFSET = 44;
+const LOGOUT_BUTTON_OFFSET = 40;
 
 export default function ListScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
@@ -65,7 +65,9 @@ export default function ListScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <DateFilterRow value={dateFilter} onChange={setDateFilter} />
+        <ThemedView style={styles.filterBarContainer}>
+          <DateFilterButton value={dateFilter} onChange={setDateFilter} />
+        </ThemedView>
         {pendingCount > 0 ? (
           <ThemedView type="backgroundElement" style={styles.pendingBanner}>
             <ThemedText type="small">
@@ -167,6 +169,10 @@ function SightingDetail({ sighting }: { sighting: Sighting }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  filterBarContainer: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
   },
   pendingBanner: {
     marginHorizontal: Spacing.four,
