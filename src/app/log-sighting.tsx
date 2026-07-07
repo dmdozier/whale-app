@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Redirect, Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, TextInput } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, TextInput } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
+import { addPendingSighting, submitSighting } from '@/lib/offline-queue';
 import { supabase } from '@/lib/supabase';
 
 type Species = { id: number; common_name: string };
@@ -22,6 +23,7 @@ export default function LogSightingScreen() {
   const { session, initializing } = useAuth();
 
   const [coords, setCoords] = useState<Coords | null>(null);
+  const [sightedAt, setSightedAt] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
@@ -46,16 +48,21 @@ export default function LogSightingScreen() {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
       });
+      setSightedAt(new Date().toISOString());
     })().catch(() => setLocationError('Could not get your location. Try again.'));
   }, []);
 
-  // Load the species list from Supabase for the picker.
+  // Load the species list from Supabase for the picker. If we're offline,
+  // this just silently fails and the picker stays empty — species is optional.
   useEffect(() => {
     supabase
       .from('species')
       .select('id, common_name')
       .order('sort_order')
-      .then(({ data }) => setSpeciesList((data ?? []) as Species[]));
+      .then(
+        ({ data }) => setSpeciesList((data ?? []) as Species[]),
+        () => {},
+      );
   }, []);
 
   if (initializing) {
@@ -79,7 +86,7 @@ export default function LogSightingScreen() {
   };
 
   const save = async () => {
-    if (!coords) {
+    if (!coords || !sightedAt) {
       setSaveError('Still waiting for your location — try again in a moment.');
       return;
     }
@@ -87,42 +94,29 @@ export default function LogSightingScreen() {
     setSaving(true);
     setSaveError(null);
 
-    const clientId = Crypto.randomUUID();
+    const pendingSighting = {
+      clientId: Crypto.randomUUID(),
+      userId: session.user.id,
+      speciesId: selectedSpeciesId,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      sightedAt,
+      notes: notes || null,
+      photoUri,
+    };
 
     try {
-      let photoUrl: string | null = null;
-
-      if (photoUri) {
-        const photoResponse = await fetch(photoUri);
-        const photoData = await photoResponse.arrayBuffer();
-        const photoPath = `${session.user.id}/${clientId}.jpg`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('sighting-photos')
-          .upload(photoPath, photoData, { contentType: 'image/jpeg' });
-        if (uploadError) {
-          throw uploadError;
-        }
-
-        photoUrl = supabase.storage.from('sighting-photos').getPublicUrl(photoPath).data.publicUrl;
-      }
-
-      const { error: insertError } = await supabase.from('sightings').insert({
-        user_id: session.user.id,
-        species_id: selectedSpeciesId,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        notes: notes || null,
-        photo_url: photoUrl,
-        client_id: clientId,
-      });
-      if (insertError) {
-        throw insertError;
-      }
-
+      await submitSighting(pendingSighting);
       router.back();
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Could not save the sighting.');
+    } catch {
+      // No connection (or a transient failure) — save it on-device instead
+      // of losing it. The background sync picks it up once we're back online.
+      await addPendingSighting(pendingSighting);
+      Alert.alert(
+        'Saved offline',
+        "This sighting is saved on your device and will sync automatically once you're back online.",
+        [{ text: 'OK', onPress: () => router.back() }],
+      );
     } finally {
       setSaving(false);
     }

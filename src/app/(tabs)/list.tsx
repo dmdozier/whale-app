@@ -8,6 +8,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { usePendingSightingsCount } from '@/hooks/use-pending-count';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
 import { formatRelativeTime } from '@/lib/sighting-time';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +20,7 @@ export default function ListScreen() {
     null,
   );
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
+  const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the List tab gains focus, so a sighting just logged
   // (or logged by someone else) shows up without needing to restart the app.
@@ -51,6 +53,13 @@ export default function ListScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        {pendingCount > 0 ? (
+          <ThemedView type="backgroundElement" style={styles.pendingBanner}>
+            <ThemedText type="small">
+              📤 {pendingCount} sighting{pendingCount === 1 ? '' : 's'} saved offline, pending sync
+            </ThemedText>
+          </ThemedView>
+        ) : null}
         <FlatList
           data={sightings}
           keyExtractor={(item) => item.id}
@@ -123,6 +132,12 @@ export default function ListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  pendingBanner: {
+    marginHorizontal: Spacing.four,
+    marginTop: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
   },
   safeArea: {
     flex: 1,

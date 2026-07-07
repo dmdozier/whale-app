@@ -6,9 +6,11 @@ import { useColorScheme } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AuthProvider } from '@/hooks/use-auth';
+import { useOfflineSync } from '@/hooks/use-offline-sync';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  useOfflineSync();
 
   return (
     <KeyboardProvider>

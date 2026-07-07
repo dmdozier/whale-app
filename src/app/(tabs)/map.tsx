@@ -7,11 +7,13 @@ import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { usePendingSightingsCount } from '@/hooks/use-pending-count';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
 
 export default function MapScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
+  const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the Map tab gains focus, so a sighting just logged
   // (or logged by someone else) shows up without needing to restart the app.
@@ -31,6 +33,14 @@ export default function MapScreen() {
 
       <LogoutButton />
 
+      {pendingCount > 0 ? (
+        <ThemedView type="backgroundElement" style={styles.pendingBanner}>
+          <ThemedText type="small">
+            📤 {pendingCount} sighting{pendingCount === 1 ? '' : 's'} pending sync
+          </ThemedText>
+        </ThemedView>
+      ) : null}
+
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
       </Pressable>
@@ -41,6 +51,14 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  pendingBanner: {
+    position: 'absolute',
+    bottom: Spacing.five + 64,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.five,
   },
   fab: {
     position: 'absolute',
