@@ -1,18 +1,26 @@
 import { useFocusEffect, router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DateFilterRow } from '@/components/date-filter-row';
 import { LogoutButton } from '@/components/logout-button';
 import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
 
+// Clears the height of the top filter bar so the logout button doesn't
+// overlap it.
+const LOGOUT_BUTTON_OFFSET = 44;
+
 export default function MapScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the Map tab gains focus, so a sighting just logged
@@ -27,11 +35,21 @@ export default function MapScreen() {
     }, []),
   );
 
+  const filteredSightings = sightings.filter((sighting) =>
+    matchesDateFilter(sighting.sighted_at, dateFilter),
+  );
+
   return (
     <ThemedView style={styles.container}>
-      <SightingsMap sightings={sightings} />
+      <SightingsMap sightings={filteredSightings} />
 
-      <LogoutButton />
+      <SafeAreaView edges={['top']} style={styles.filterBarSafeArea}>
+        <ThemedView type="backgroundElement" style={styles.filterBar}>
+          <DateFilterRow value={dateFilter} onChange={setDateFilter} />
+        </ThemedView>
+      </SafeAreaView>
+
+      <LogoutButton topOffset={LOGOUT_BUTTON_OFFSET} />
 
       {pendingCount > 0 ? (
         <ThemedView type="backgroundElement" style={styles.pendingBanner}>
@@ -51,6 +69,16 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  filterBarSafeArea: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  filterBar: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
   pendingBanner: {
     position: 'absolute',

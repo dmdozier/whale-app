@@ -4,16 +4,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { FlatList, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DateFilterRow } from '@/components/date-filter-row';
 import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
 import { formatRelativeTime } from '@/lib/sighting-time';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
+
+// Clears the height of the top filter bar so the logout button doesn't
+// overlap it.
+const LOGOUT_BUTTON_OFFSET = 44;
 
 export default function ListScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
@@ -21,6 +27,7 @@ export default function ListScreen() {
     null,
   );
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the List tab gains focus, so a sighting just logged
@@ -51,9 +58,14 @@ export default function ListScreen() {
     })().catch(() => {});
   }, []);
 
+  const filteredSightings = sightings.filter((sighting) =>
+    matchesDateFilter(sighting.sighted_at, dateFilter),
+  );
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
+        <DateFilterRow value={dateFilter} onChange={setDateFilter} />
         {pendingCount > 0 ? (
           <ThemedView type="backgroundElement" style={styles.pendingBanner}>
             <ThemedText type="small">
@@ -62,7 +74,7 @@ export default function ListScreen() {
           </ThemedView>
         ) : null}
         <FlatList
-          data={sightings}
+          data={filteredSightings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -72,7 +84,7 @@ export default function ListScreen() {
               </ThemedText>
               <ThemedText type="subtitle">Recent Sightings</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.centerText}>
-                No sightings yet.
+                {dateFilter === 'all' ? 'No sightings yet.' : 'No sightings in this time range.'}
               </ThemedText>
             </ThemedView>
           }
@@ -86,7 +98,7 @@ export default function ListScreen() {
         />
       </SafeAreaView>
 
-      <LogoutButton />
+      <LogoutButton topOffset={LOGOUT_BUTTON_OFFSET} />
 
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
