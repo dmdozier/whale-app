@@ -13,9 +13,10 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 import { addPendingSighting, submitSighting } from '@/lib/offline-queue';
+import { getCachedSpecies, setCachedSpecies } from '@/lib/species-cache';
 import { supabase } from '@/lib/supabase';
+import type { Species } from '@/types/species';
 
-type Species = { id: number; common_name: string };
 type Coords = { latitude: number; longitude: number };
 
 export default function LogSightingScreen() {
@@ -52,15 +53,23 @@ export default function LogSightingScreen() {
     })().catch(() => setLocationError('Could not get your location. Try again.'));
   }, []);
 
-  // Load the species list from Supabase for the picker. If we're offline,
-  // this just silently fails and the picker stays empty — species is optional.
+  // Show whatever species list is cached from the last successful fetch
+  // right away, then refresh it from Supabase. If we're offline, the
+  // refresh just silently fails and the cached list stays put.
   useEffect(() => {
+    getCachedSpecies().then(setSpeciesList);
+
     supabase
       .from('species')
       .select('id, common_name')
       .order('sort_order')
       .then(
-        ({ data }) => setSpeciesList((data ?? []) as Species[]),
+        ({ data }) => {
+          if (data) {
+            setSpeciesList(data as Species[]);
+            setCachedSpecies(data as Species[]);
+          }
+        },
         () => {},
       );
   }, []);
