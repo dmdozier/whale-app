@@ -33,6 +33,11 @@ export default function MapScreen() {
         .from('sightings')
         .select('id, latitude, longitude, sighted_at, notes, photo_url, species(common_name)')
         .order('sighted_at', { ascending: false })
+        // Defensive cap: rendering/clustering an unbounded number of pins
+        // gets expensive (and, per known react-native-map-clustering issues,
+        // crash-prone) as the table grows. The most recent 500 sightings is
+        // already far more than useful to look at on a map at once.
+        .limit(500)
         .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
     }, []),
   );

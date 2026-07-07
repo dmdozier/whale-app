@@ -62,7 +62,18 @@ export function SightingsMap({
       initialRegion={initialRegion}
       showsUserLocation
       clusterColor="#208AEF"
-      clusterTextColor="#ffffff">
+      clusterTextColor="#ffffff"
+      // Rapid/extreme zooming with this library is a known source of native
+      // crashes on Android (see e.g. react-native-maps#5516 and similar
+      // reports against react-native-map-clustering) — it's tied to the
+      // "spiderfy" animation it runs when many markers share ~the same spot
+      // at high zoom, and to LayoutAnimation firing on every region change.
+      // Sightings logged from the same popular viewing spot are exactly the
+      // case that triggers it, so disable both rather than just hoping it
+      // doesn't come up, and cap how far in clustering bothers to recompute.
+      spiralEnabled={false}
+      animationEnabled={false}
+      maxZoom={17}>
       {sightings.map((sighting) => (
         <SightingMarker
           key={sighting.id}
