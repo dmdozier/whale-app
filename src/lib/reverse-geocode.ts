@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
 const CACHE_KEY = 'whale-app/geocode-cache';
-// ~0.001 degrees is roughly 100m — plenty of precision for a "nearby
-// city/area" label, and it lets sightings near each other share a cache hit.
-const PRECISION = 3;
+// ~0.0001 degrees is roughly 11m. Labels can now resolve down to street/
+// landmark level, so the cache grid needs to be tight enough that two
+// distinct nearby addresses don't collapse into the same cached label.
+const PRECISION = 4;
 
 let memoryCache: Record<string, string> | null = null;
 
@@ -21,9 +22,23 @@ function cacheKeyFor(latitude: number, longitude: number) {
 }
 
 function formatAddress(address: Location.LocationGeocodedAddress): string {
-  const city = address.city ?? address.subregion ?? address.district ?? undefined;
+  const streetAddress =
+    [address.streetNumber, address.street].filter(Boolean).join(' ') || undefined;
+  // `name` is a named landmark/POI when the geocoder recognizes one at this
+  // spot (e.g. "Alki Beach Park") — but for plain addresses it's often just
+  // the street address again, so only treat it as a landmark when it differs.
+  const landmark = address.name && address.name !== streetAddress ? address.name : undefined;
+
+  const specific = landmark ?? streetAddress ?? address.district ?? undefined;
+  const city = address.city ?? address.subregion ?? undefined;
   const region = address.region ?? undefined;
 
+  if (specific && city) {
+    return `${specific}, ${city}`;
+  }
+  if (specific) {
+    return specific;
+  }
   if (city && region) {
     return `${city}, ${region}`;
   }
