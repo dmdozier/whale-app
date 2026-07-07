@@ -1,7 +1,9 @@
 import * as Location from 'expo-location';
 import { useEffect, useRef } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import MapView, { Callout, Marker, type Region } from 'react-native-maps';
+import ClusteredMapView from 'react-native-map-clustering';
+import type MapView from 'react-native-maps';
+import { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
@@ -46,30 +48,47 @@ export function SightingsMap({
   }, []);
 
   return (
-    <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} showsUserLocation>
+    // react-native-map-clustering forwards its ref straight to the
+    // underlying react-native-maps MapView instance, but its own .d.ts
+    // types the ref as its (mostly untyped) own class — casting here since
+    // the runtime value genuinely is a MapView with animateToRegion etc.
+    <ClusteredMapView
+      ref={mapRef as never}
+      style={styles.map}
+      initialRegion={DEFAULT_REGION}
+      showsUserLocation
+      clusterColor="#208AEF"
+      clusterTextColor="#ffffff">
       {sightings.map((sighting) => (
-        <SightingMarker key={sighting.id} sighting={sighting} onPhotoPress={onPhotoPress} />
+        <SightingMarker
+          key={sighting.id}
+          sighting={sighting}
+          onPhotoPress={onPhotoPress}
+          // react-native-map-clustering detects which children to cluster by
+          // duck-typing a `coordinate` prop directly on each one — it doesn't
+          // check the component type, so this has to be set here.
+          coordinate={{ latitude: sighting.latitude, longitude: sighting.longitude }}
+        />
       ))}
-    </MapView>
+    </ClusteredMapView>
   );
 }
 
 function SightingMarker({
   sighting,
+  coordinate,
   onPhotoPress,
 }: {
   sighting: Sighting;
+  coordinate: { latitude: number; longitude: number };
   onPhotoPress: (photoUrl: string) => void;
 }) {
   const recent = isRecentSighting(sighting.sighted_at);
-  const locationLabel = useLocationLabel({
-    latitude: sighting.latitude,
-    longitude: sighting.longitude,
-  });
+  const locationLabel = useLocationLabel(coordinate);
 
   return (
     <Marker
-      coordinate={{ latitude: sighting.latitude, longitude: sighting.longitude }}
+      coordinate={coordinate}
       pinColor={recent ? '#208AEF' : '#9AA0A6'}
       opacity={recent ? 1 : 0.55}>
       <Callout onPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}>
