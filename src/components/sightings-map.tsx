@@ -1,8 +1,7 @@
 import * as Location from 'expo-location';
-import { useEffect, useRef } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import ClusteredMapView from 'react-native-map-clustering';
-import type MapView from 'react-native-maps';
 import { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
@@ -23,39 +22,44 @@ export function SightingsMap({
   sightings: Sighting[];
   onPhotoPress: (photoUrl: string) => void;
 }) {
-  const mapRef = useRef<MapView>(null);
+  // react-native-map-clustering only computes clusters on mount (from
+  // whatever region it starts at) and when the map reports a region change.
+  // Rendering it at DEFAULT_REGION and then imperatively animating to the
+  // user's location doesn't reliably fire that region-change callback, so
+  // clusters were stuck reflecting the wrong (far more zoomed-out) region
+  // until the user manually panned or pinched. Resolving the real starting
+  // region before the map ever mounts avoids that entirely.
+  const [initialRegion, setInitialRegion] = useState<Region | null>(null);
 
-  // Center and zoom to the user's current location on open. If permission
-  // isn't granted or the location can't be resolved, the map just stays on
-  // DEFAULT_REGION instead of blocking or erroring.
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
+        setInitialRegion(DEFAULT_REGION);
         return;
       }
       const position = await Location.getCurrentPositionAsync({});
-      mapRef.current?.animateToRegion(
-        {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          latitudeDelta: 0.1,
-          longitudeDelta: 0.1,
-        },
-        700,
-      );
-    })().catch(() => {});
+      setInitialRegion({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        latitudeDelta: 0.1,
+        longitudeDelta: 0.1,
+      });
+    })().catch(() => setInitialRegion(DEFAULT_REGION));
   }, []);
 
+  if (!initialRegion) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
   return (
-    // react-native-map-clustering forwards its ref straight to the
-    // underlying react-native-maps MapView instance, but its own .d.ts
-    // types the ref as its (mostly untyped) own class — casting here since
-    // the runtime value genuinely is a MapView with animateToRegion etc.
     <ClusteredMapView
-      ref={mapRef as never}
       style={styles.map}
-      initialRegion={DEFAULT_REGION}
+      initialRegion={initialRegion}
       showsUserLocation
       clusterColor="#208AEF"
       clusterTextColor="#ffffff">
@@ -112,6 +116,11 @@ function SightingMarker({
 const styles = StyleSheet.create({
   map: {
     flex: 1,
+  },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   callout: {
     minWidth: 160,
