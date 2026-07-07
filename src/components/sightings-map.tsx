@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import ClusteredMapView from 'react-native-map-clustering';
 import { Callout, Marker, type Region } from 'react-native-maps';
@@ -30,23 +31,36 @@ export function SightingsMap({
   // until the user manually panned or pinched. Resolving the real starting
   // region before the map ever mounts avoids that entirely.
   const [initialRegion, setInitialRegion] = useState<Region | null>(null);
+  // Bumped on every successful location fetch so the key below changes,
+  // forcing a fresh mount of the map. That's what actually makes it
+  // re-center — react-native-maps only reads `initialRegion` once per
+  // mount, and updating the prop on an already-mounted map does nothing.
+  const [mapKey, setMapKey] = useState(0);
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setInitialRegion(DEFAULT_REGION);
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({});
-      setInitialRegion({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        latitudeDelta: 0.1,
-        longitudeDelta: 0.1,
-      });
-    })().catch(() => setInitialRegion(DEFAULT_REGION));
-  }, []);
+  // Expo Router keeps tab screens mounted when you switch away from them,
+  // so a plain mount-only effect here only ever ran once for the lifetime
+  // of the app. Use useFocusEffect so the location is re-fetched and the
+  // map re-centered every time the Map tab is opened or regains focus, not
+  // just the very first time.
+  useFocusEffect(
+    useCallback(() => {
+      (async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setInitialRegion((current) => current ?? DEFAULT_REGION);
+          return;
+        }
+        const position = await Location.getCurrentPositionAsync({});
+        setInitialRegion({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        });
+        setMapKey((key) => key + 1);
+      })().catch(() => setInitialRegion((current) => current ?? DEFAULT_REGION));
+    }, []),
+  );
 
   if (!initialRegion) {
     return (
@@ -58,6 +72,7 @@ export function SightingsMap({
 
   return (
     <ClusteredMapView
+      key={mapKey}
       style={styles.map}
       initialRegion={initialRegion}
       showsUserLocation
