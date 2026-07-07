@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
@@ -14,7 +14,13 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 4,
 };
 
-export function SightingsMap({ sightings }: { sightings: Sighting[] }) {
+export function SightingsMap({
+  sightings,
+  onPhotoPress,
+}: {
+  sightings: Sighting[];
+  onPhotoPress: (photoUrl: string) => void;
+}) {
   const mapRef = useRef<MapView>(null);
 
   // Center and zoom to the user's current location on open. If permission
@@ -42,13 +48,19 @@ export function SightingsMap({ sightings }: { sightings: Sighting[] }) {
   return (
     <MapView ref={mapRef} style={styles.map} initialRegion={DEFAULT_REGION} showsUserLocation>
       {sightings.map((sighting) => (
-        <SightingMarker key={sighting.id} sighting={sighting} />
+        <SightingMarker key={sighting.id} sighting={sighting} onPhotoPress={onPhotoPress} />
       ))}
     </MapView>
   );
 }
 
-function SightingMarker({ sighting }: { sighting: Sighting }) {
+function SightingMarker({
+  sighting,
+  onPhotoPress,
+}: {
+  sighting: Sighting;
+  onPhotoPress: (photoUrl: string) => void;
+}) {
   const recent = isRecentSighting(sighting.sighted_at);
   const locationLabel = useLocationLabel({
     latitude: sighting.latitude,
@@ -60,8 +72,11 @@ function SightingMarker({ sighting }: { sighting: Sighting }) {
       coordinate={{ latitude: sighting.latitude, longitude: sighting.longitude }}
       pinColor={recent ? '#208AEF' : '#9AA0A6'}
       opacity={recent ? 1 : 0.55}>
-      <Callout>
+      <Callout onPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}>
         <View style={styles.callout}>
+          {sighting.photo_url ? (
+            <Image source={{ uri: sighting.photo_url }} style={styles.calloutPhoto} />
+          ) : null}
           <Text style={styles.calloutTitle}>
             {sighting.species?.common_name ?? 'Species not noted'}
           </Text>
@@ -83,6 +98,12 @@ const styles = StyleSheet.create({
     minWidth: 160,
     maxWidth: 240,
     gap: 2,
+  },
+  calloutPhoto: {
+    width: '100%',
+    height: 90,
+    borderRadius: 6,
+    marginBottom: 4,
   },
   calloutTitle: {
     fontWeight: '700',

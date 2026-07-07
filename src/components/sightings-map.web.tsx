@@ -6,7 +6,10 @@ import type { Sighting } from '@/types/sighting';
 
 // react-native-maps has no web implementation, so the web build shows a
 // plain message instead of pins. The real map runs on iOS/Android.
-export function SightingsMap(_props: { sightings: Sighting[] }) {
+export function SightingsMap(_props: {
+  sightings: Sighting[];
+  onPhotoPress: (photoUrl: string) => void;
+}) {
   return (
     <View style={styles.container}>
       <ThemedText type="title" style={styles.emoji}>

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
+import { PhotoViewerModal } from '@/components/photo-viewer-modal';
 import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -21,6 +22,7 @@ const LOGOUT_BUTTON_OFFSET = 40;
 export default function MapScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the Map tab gains focus, so a sighting just logged
@@ -29,7 +31,7 @@ export default function MapScreen() {
     useCallback(() => {
       supabase
         .from('sightings')
-        .select('id, latitude, longitude, sighted_at, notes, species(common_name)')
+        .select('id, latitude, longitude, sighted_at, notes, photo_url, species(common_name)')
         .order('sighted_at', { ascending: false })
         .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
     }, []),
@@ -41,7 +43,7 @@ export default function MapScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SightingsMap sightings={filteredSightings} />
+      <SightingsMap sightings={filteredSightings} onPhotoPress={setViewingPhotoUrl} />
 
       <SafeAreaView edges={['top']} style={styles.filterBarSafeArea}>
         <DateFilterButton value={dateFilter} onChange={setDateFilter} />
@@ -60,6 +62,8 @@ export default function MapScreen() {
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
       </Pressable>
+
+      <PhotoViewerModal photoUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
     </ThemedView>
   );
 }

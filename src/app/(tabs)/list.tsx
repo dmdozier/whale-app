@@ -1,11 +1,12 @@
 import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet } from 'react-native';
+import { FlatList, Image, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
+import { PhotoViewerModal } from '@/components/photo-viewer-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -28,6 +29,7 @@ export default function ListScreen() {
   );
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const pendingCount = usePendingSightingsCount();
 
   // Refetch whenever the List tab gains focus, so a sighting just logged
@@ -36,7 +38,7 @@ export default function ListScreen() {
     useCallback(() => {
       supabase
         .from('sightings')
-        .select('id, latitude, longitude, sighted_at, notes, species(common_name)')
+        .select('id, latitude, longitude, sighted_at, notes, photo_url, species(common_name)')
         .order('sighted_at', { ascending: false })
         .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
     }, []),
@@ -95,6 +97,7 @@ export default function ListScreen() {
               sighting={item}
               userLocation={userLocation}
               onPress={() => setSelectedSighting(item)}
+              onPhotoPress={setViewingPhotoUrl}
             />
           )}
         />
@@ -112,10 +115,34 @@ export default function ListScreen() {
         animationType="fade"
         onRequestClose={() => setSelectedSighting(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedSighting(null)}>
-          {selectedSighting ? <SightingDetail sighting={selectedSighting} /> : null}
+          {selectedSighting ? (
+            <SightingDetail sighting={selectedSighting} onPhotoPress={setViewingPhotoUrl} />
+          ) : null}
         </Pressable>
       </Modal>
+
+      <PhotoViewerModal photoUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
     </ThemedView>
+  );
+}
+
+function PhotoThumbnail({
+  photoUrl,
+  onPress,
+}: {
+  photoUrl: string | null;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} disabled={!photoUrl}>
+      {photoUrl ? (
+        <Image source={{ uri: photoUrl }} style={styles.thumbnail} />
+      ) : (
+        <ThemedView type="backgroundSelected" style={styles.thumbnail}>
+          <ThemedText style={styles.thumbnailPlaceholderIcon}>📷</ThemedText>
+        </ThemedView>
+      )}
+    </Pressable>
   );
 }
 
@@ -123,10 +150,12 @@ function SightingRow({
   sighting,
   userLocation,
   onPress,
+  onPhotoPress,
 }: {
   sighting: Sighting;
   userLocation: { latitude: number; longitude: number } | null;
   onPress: () => void;
+  onPhotoPress: (photoUrl: string) => void;
 }) {
   const locationLabel = useLocationLabel({
     latitude: sighting.latitude,
@@ -137,19 +166,29 @@ function SightingRow({
     : null;
 
   return (
-    <Pressable onPress={onPress}>
-      <ThemedView type="backgroundElement" style={styles.row}>
+    <ThemedView type="backgroundElement" style={styles.row}>
+      <PhotoThumbnail
+        photoUrl={sighting.photo_url}
+        onPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}
+      />
+      <Pressable style={styles.rowText} onPress={onPress}>
         <ThemedText type="smallBold">{sighting.species?.common_name ?? 'Species not noted'}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
           {distanceLabel ? ` · ${distanceLabel}` : ''}
         </ThemedText>
-      </ThemedView>
-    </Pressable>
+      </Pressable>
+    </ThemedView>
   );
 }
 
-function SightingDetail({ sighting }: { sighting: Sighting }) {
+function SightingDetail({
+  sighting,
+  onPhotoPress,
+}: {
+  sighting: Sighting;
+  onPhotoPress: (photoUrl: string) => void;
+}) {
   const locationLabel = useLocationLabel({
     latitude: sighting.latitude,
     longitude: sighting.longitude,
@@ -162,6 +201,11 @@ function SightingDetail({ sighting }: { sighting: Sighting }) {
         {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
       </ThemedText>
       {sighting.notes ? <ThemedText type="small" style={styles.modalNotes}>{sighting.notes}</ThemedText> : null}
+      {sighting.photo_url ? (
+        <Pressable onPress={() => onPhotoPress(sighting.photo_url!)} style={styles.modalPhotoButton}>
+          <Image source={{ uri: sighting.photo_url }} style={styles.modalPhoto} />
+        </Pressable>
+      ) : null}
     </ThemedView>
   );
 }
@@ -203,9 +247,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   row: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: Spacing.two,
     padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  rowText: {
+    flex: 1,
     gap: 2,
+  },
+  thumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbnailPlaceholderIcon: {
+    fontSize: 20,
   },
   fab: {
     position: 'absolute',
@@ -236,5 +296,13 @@ const styles = StyleSheet.create({
   },
   modalNotes: {
     marginTop: Spacing.two,
+  },
+  modalPhotoButton: {
+    marginTop: Spacing.two,
+  },
+  modalPhoto: {
+    width: '100%',
+    height: 160,
+    borderRadius: Spacing.two,
   },
 });
