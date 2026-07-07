@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
+import { useLocationLabel } from '@/hooks/use-location-label';
 import { useTheme } from '@/hooks/use-theme';
 import { addPendingSighting, submitSighting } from '@/lib/offline-queue';
 import { getCachedSpecies, setCachedSpecies } from '@/lib/species-cache';
@@ -26,6 +27,7 @@ export default function LogSightingScreen() {
   const [coords, setCoords] = useState<Coords | null>(null);
   const [sightedAt, setSightedAt] = useState<string | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const locationLabel = useLocationLabel(coords);
 
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(null);
@@ -151,7 +153,7 @@ export default function LogSightingScreen() {
           <ThemedView type="backgroundElement" style={styles.locationCard}>
             {coords ? (
               <ThemedText type="smallBold">
-                📍 Location captured ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
+                📍 {locationLabel ?? 'Location captured — looking up the area…'}
               </ThemedText>
             ) : locationError ? (
               <ThemedText type="smallBold" style={styles.errorText}>

@@ -8,6 +8,7 @@ import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
 import { formatRelativeTime } from '@/lib/sighting-time';
@@ -75,24 +76,13 @@ export default function ListScreen() {
               </ThemedText>
             </ThemedView>
           }
-          renderItem={({ item }) => {
-            const distanceLabel = userLocation
-              ? formatDistanceMiles(distanceInMiles(userLocation, item))
-              : null;
-            return (
-              <Pressable onPress={() => setSelectedSighting(item)}>
-                <ThemedView type="backgroundElement" style={styles.row}>
-                  <ThemedText type="smallBold">
-                    {item.species?.common_name ?? 'Species not noted'}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatRelativeTime(item.sighted_at)}
-                    {distanceLabel ? ` · ${distanceLabel}` : ''}
-                  </ThemedText>
-                </ThemedView>
-              </Pressable>
-            );
-          }}
+          renderItem={({ item }) => (
+            <SightingRow
+              sighting={item}
+              userLocation={userLocation}
+              onPress={() => setSelectedSighting(item)}
+            />
+          )}
         />
       </SafeAreaView>
 
@@ -108,23 +98,56 @@ export default function ListScreen() {
         animationType="fade"
         onRequestClose={() => setSelectedSighting(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedSighting(null)}>
-          {selectedSighting ? (
-            <ThemedView type="backgroundElement" style={styles.modalCard}>
-              <ThemedText type="smallBold">
-                {selectedSighting.species?.common_name ?? 'Species not noted'}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {formatRelativeTime(selectedSighting.sighted_at)}
-              </ThemedText>
-              {selectedSighting.notes ? (
-                <ThemedText type="small" style={styles.modalNotes}>
-                  {selectedSighting.notes}
-                </ThemedText>
-              ) : null}
-            </ThemedView>
-          ) : null}
+          {selectedSighting ? <SightingDetail sighting={selectedSighting} /> : null}
         </Pressable>
       </Modal>
+    </ThemedView>
+  );
+}
+
+function SightingRow({
+  sighting,
+  userLocation,
+  onPress,
+}: {
+  sighting: Sighting;
+  userLocation: { latitude: number; longitude: number } | null;
+  onPress: () => void;
+}) {
+  const locationLabel = useLocationLabel({
+    latitude: sighting.latitude,
+    longitude: sighting.longitude,
+  });
+  const distanceLabel = userLocation
+    ? formatDistanceMiles(distanceInMiles(userLocation, sighting))
+    : null;
+
+  return (
+    <Pressable onPress={onPress}>
+      <ThemedView type="backgroundElement" style={styles.row}>
+        <ThemedText type="smallBold">{sighting.species?.common_name ?? 'Species not noted'}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
+          {distanceLabel ? ` · ${distanceLabel}` : ''}
+        </ThemedText>
+      </ThemedView>
+    </Pressable>
+  );
+}
+
+function SightingDetail({ sighting }: { sighting: Sighting }) {
+  const locationLabel = useLocationLabel({
+    latitude: sighting.latitude,
+    longitude: sighting.longitude,
+  });
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.modalCard}>
+      <ThemedText type="smallBold">{sighting.species?.common_name ?? 'Species not noted'}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
+      </ThemedText>
+      {sighting.notes ? <ThemedText type="small" style={styles.modalNotes}>{sighting.notes}</ThemedText> : null}
     </ThemedView>
   );
 }
