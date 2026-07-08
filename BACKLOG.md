@@ -1,5 +1,4 @@
 # Future Enhancements
 
 - Require login again when app is fully closed and reopened (currently stays logged in — intentional for now, to make testing easier)
-- Optional additional fields when logging a sighting: (1) Location type — Sea or Land; (2) Distance estimate — a rough category like Near/Medium/Far rather than an exact number, with a short description of what each category means (e.g., based on how clearly the animal could be seen) rather than a precise distance.
 - Map clustering bug: tapping/zooming into a cluster bubble doesn't always reveal all pins it represents (e.g., a "5" cluster only showed 2-3 pins). Only reproduced when many sightings share the exact same location during testing — likely a rare edge case, but worth revisiting. Technical note: this is a side effect of disabling `spiralEnabled` in the crash fix — that feature previously fanned out pins at identical coordinates so they wouldn't stack. A proper fix would need a different, crash-safe way to spread out same-location pins, rather than simply re-enabling that setting.
