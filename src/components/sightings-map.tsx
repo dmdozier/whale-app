@@ -1,11 +1,12 @@
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import ClusteredMapView from 'react-native-map-clustering';
 import { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
+import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
 import type { Sighting } from '@/types/sighting';
@@ -63,6 +64,15 @@ export function SightingsMap({
     }, []),
   );
 
+  // Fires after every render commits (no dependency array) — narrows down
+  // whether a crash happens before React finishes reconciling this
+  // component's JS-side tree, or later, when the native side actually
+  // creates/lays out the corresponding map/marker views (a separate,
+  // asynchronously-batched step that this breadcrumb can't see into).
+  useEffect(() => {
+    recordBreadcrumb(`SightingsMap:render:committed count=${sightings.length} mapKey=${mapKey}`);
+  });
+
   if (!initialRegion) {
     return (
       <View style={styles.loading}>
@@ -117,6 +127,17 @@ function SightingMarker({
   const recent = isRecentSighting(sighting.sighted_at);
   const locationLabel = useLocationLabel(coordinate);
   const extras = formatSightingExtras(sighting);
+
+  // Fires once this marker has mounted. Sightings are ordered newest-first,
+  // so a just-saved sighting is always the first child rendered — if the
+  // trail is missing this marker's id specifically (while older markers'
+  // ids are present), that points at something particular to this sighting
+  // rather than a generic issue with marker count.
+  useEffect(() => {
+    recordBreadcrumb(
+      `SightingMarker:mounted id=${sighting.id} location_type=${sighting.location_type} distance_estimate=${sighting.distance_estimate}`,
+    );
+  }, [sighting.id, sighting.location_type, sighting.distance_estimate]);
 
   return (
     <Marker
