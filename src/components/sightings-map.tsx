@@ -89,7 +89,11 @@ export function SightingsMap({
   // Spreading duplicates apart by a few meters means it never sees an exact
   // match in the first place.
   const jitteredCoordinates = jitterDuplicateCoordinates(
-    sightings.map((sighting) => ({ latitude: sighting.latitude, longitude: sighting.longitude })),
+    sightings.map((sighting) => ({
+      id: sighting.id,
+      latitude: sighting.latitude,
+      longitude: sighting.longitude,
+    })),
   );
 
   return (
