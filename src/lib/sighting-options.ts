@@ -1,9 +1,19 @@
 export type LocationType = 'sea' | 'land';
 export type DistanceEstimate = 'near' | 'medium' | 'far';
 
+// Icons are deliberately single-codepoint emoji (no variation selectors or
+// ZWJ sequences). On Android, react-native-maps rasterizes each Callout's
+// content into a bitmap (Google Maps' native SDK can only host a static
+// bitmap for its info-window overlay, not a live view), which runs through
+// Android's Canvas/text-layout APIs — a much more crash-prone path for
+// complex Unicode grapheme clusters than the plain TextView used everywhere
+// else in the app. 🏝️ (island + a variation selector) was used here
+// originally and is the prime suspect for a crash seen right after saving a
+// sighting with both these fields set — the first time any emoji had ever
+// been rendered inside a Callout.
 export const LOCATION_TYPE_OPTIONS: { value: LocationType; label: string; icon: string }[] = [
   { value: 'sea', label: 'Sea', icon: '🌊' },
-  { value: 'land', label: 'Land', icon: '🏝️' },
+  { value: 'land', label: 'Land', icon: '🌳' },
 ];
 
 export const DISTANCE_OPTIONS: {
