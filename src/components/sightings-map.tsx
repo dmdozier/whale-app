@@ -7,6 +7,7 @@ import { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
+import { jitterDuplicateCoordinates } from '@/lib/dedupe-coordinates';
 import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
 import type { Sighting } from '@/types/sighting';
@@ -81,6 +82,16 @@ export function SightingsMap({
     );
   }
 
+  // See dedupe-coordinates.ts: sightings logged from the same spot (the
+  // norm when testing repeatedly, or at a popular viewing location) share
+  // an exact coordinate, which is suspected to be what crashes this
+  // library's native rendering when a new one is added to that cluster.
+  // Spreading duplicates apart by a few meters means it never sees an exact
+  // match in the first place.
+  const jitteredCoordinates = jitterDuplicateCoordinates(
+    sightings.map((sighting) => ({ latitude: sighting.latitude, longitude: sighting.longitude })),
+  );
+
   return (
     <ClusteredMapView
       key={mapKey}
@@ -100,7 +111,7 @@ export function SightingsMap({
       spiralEnabled={false}
       animationEnabled={false}
       maxZoom={17}>
-      {sightings.map((sighting) => (
+      {sightings.map((sighting, index) => (
         <SightingMarker
           key={sighting.id}
           sighting={sighting}
@@ -108,7 +119,7 @@ export function SightingsMap({
           // react-native-map-clustering detects which children to cluster by
           // duck-typing a `coordinate` prop directly on each one — it doesn't
           // check the component type, so this has to be set here.
-          coordinate={{ latitude: sighting.latitude, longitude: sighting.longitude }}
+          coordinate={jitteredCoordinates[index]}
         />
       ))}
     </ClusteredMapView>
