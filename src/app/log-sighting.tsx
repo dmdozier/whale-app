@@ -15,6 +15,13 @@ import { useAuth } from '@/hooks/use-auth';
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { useTheme } from '@/hooks/use-theme';
 import { addPendingSighting, submitSighting } from '@/lib/offline-queue';
+import {
+  DISTANCE_OPTIONS,
+  getDistanceOption,
+  LOCATION_TYPE_OPTIONS,
+  type DistanceEstimate,
+  type LocationType,
+} from '@/lib/sighting-options';
 import { getCachedSpecies, setCachedSpecies } from '@/lib/species-cache';
 import { supabase } from '@/lib/supabase';
 import type { Species } from '@/types/species';
@@ -32,6 +39,9 @@ export default function LogSightingScreen() {
 
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<number | null>(null);
+
+  const [locationType, setLocationType] = useState<LocationType | null>(null);
+  const [distanceEstimate, setDistanceEstimate] = useState<DistanceEstimate | null>(null);
 
   const [notes, setNotes] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -146,6 +156,8 @@ export default function LogSightingScreen() {
       sightedAt,
       notes: notes || null,
       photoUri,
+      locationType,
+      distanceEstimate,
     };
 
     try {
@@ -224,6 +236,59 @@ export default function LogSightingScreen() {
               );
             })}
           </ThemedView>
+
+          <ThemedText type="smallBold" style={styles.label}>
+            Location type (optional)
+          </ThemedText>
+          <ThemedView style={styles.chipRow}>
+            {LOCATION_TYPE_OPTIONS.map((option) => {
+              const selected = locationType === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setLocationType(selected ? null : option.value)}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: selected ? theme.text : theme.backgroundElement },
+                  ]}>
+                  <ThemedText
+                    type="small"
+                    style={{ color: selected ? theme.background : theme.text }}>
+                    {option.icon} {option.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ThemedView>
+
+          <ThemedText type="smallBold" style={styles.label}>
+            Distance (optional)
+          </ThemedText>
+          <ThemedView style={styles.chipRow}>
+            {DISTANCE_OPTIONS.map((option) => {
+              const selected = distanceEstimate === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => setDistanceEstimate(selected ? null : option.value)}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: selected ? theme.text : theme.backgroundElement },
+                  ]}>
+                  <ThemedText
+                    type="small"
+                    style={{ color: selected ? theme.background : theme.text }}>
+                    {option.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ThemedView>
+          {distanceEstimate ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              {getDistanceOption(distanceEstimate)?.description}
+            </ThemedText>
+          ) : null}
 
           <ThemedText type="smallBold" style={styles.label}>
             Notes (optional)

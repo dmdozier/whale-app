@@ -14,6 +14,7 @@ import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
 import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
+import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime } from '@/lib/sighting-time';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
@@ -38,7 +39,9 @@ export default function ListScreen() {
     useCallback(() => {
       supabase
         .from('sightings')
-        .select('id, latitude, longitude, sighted_at, notes, photo_url, species(common_name)')
+        .select(
+          'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(common_name)',
+        )
         .order('sighted_at', { ascending: false })
         .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
     }, []),
@@ -164,6 +167,7 @@ function SightingRow({
   const distanceLabel = userLocation
     ? formatDistanceMiles(distanceInMiles(userLocation, sighting))
     : null;
+  const extras = formatSightingExtras(sighting);
 
   return (
     <ThemedView type="backgroundElement" style={styles.row}>
@@ -177,6 +181,11 @@ function SightingRow({
           {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
           {distanceLabel ? ` · ${distanceLabel}` : ''}
         </ThemedText>
+        {extras ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {extras}
+          </ThemedText>
+        ) : null}
       </Pressable>
     </ThemedView>
   );
@@ -194,12 +203,19 @@ function SightingDetail({
     longitude: sighting.longitude,
   });
 
+  const extras = formatSightingExtras(sighting);
+
   return (
     <ThemedView type="backgroundElement" style={styles.modalCard}>
       <ThemedText type="smallBold">{sighting.species?.common_name ?? 'Species not noted'}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
       </ThemedText>
+      {extras ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {extras}
+        </ThemedText>
+      ) : null}
       {sighting.notes ? <ThemedText type="small" style={styles.modalNotes}>{sighting.notes}</ThemedText> : null}
       {sighting.photo_url ? (
         <Pressable onPress={() => onPhotoPress(sighting.photo_url!)} style={styles.modalPhotoButton}>

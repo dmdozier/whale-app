@@ -36,6 +36,8 @@ create table sightings (
   sighted_at timestamptz not null default now(),   -- when the whale was actually seen
   notes text,
   photo_url text,
+  location_type text check (location_type in ('sea', 'land')),
+  distance_estimate text check (distance_estimate in ('near', 'medium', 'far')),
   created_at timestamptz not null default now(),   -- when the row was inserted
   client_id text                                    -- optional: id generated on-device, helps de-dupe on sync retries
 );

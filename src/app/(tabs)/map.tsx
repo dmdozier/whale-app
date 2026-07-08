@@ -31,7 +31,9 @@ export default function MapScreen() {
     useCallback(() => {
       supabase
         .from('sightings')
-        .select('id, latitude, longitude, sighted_at, notes, photo_url, species(common_name)')
+        .select(
+          'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(common_name)',
+        )
         .order('sighted_at', { ascending: false })
         // Defensive cap: rendering/clustering an unbounded number of pins
         // gets expensive (and, per known react-native-map-clustering issues,

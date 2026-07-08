@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
+import type { DistanceEstimate, LocationType } from '@/lib/sighting-options';
 import { supabase } from '@/lib/supabase';
 
 const QUEUE_KEY = 'whale-app/pending-sightings';
@@ -15,6 +16,8 @@ export type PendingSighting = {
   sightedAt: string;
   notes: string | null;
   photoUri: string | null;
+  locationType: LocationType | null;
+  distanceEstimate: DistanceEstimate | null;
   status: 'pending' | 'synced';
 };
 
@@ -86,6 +89,8 @@ export async function submitSighting(sighting: Omit<PendingSighting, 'status'>) 
     sighted_at: sighting.sightedAt,
     notes: sighting.notes,
     photo_url: photoUrl,
+    location_type: sighting.locationType,
+    distance_estimate: sighting.distanceEstimate,
     client_id: sighting.clientId,
   });
 

@@ -6,6 +6,7 @@ import ClusteredMapView from 'react-native-map-clustering';
 import { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
+import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
 import type { Sighting } from '@/types/sighting';
 
@@ -115,6 +116,7 @@ function SightingMarker({
 }) {
   const recent = isRecentSighting(sighting.sighted_at);
   const locationLabel = useLocationLabel(coordinate);
+  const extras = formatSightingExtras(sighting);
 
   return (
     <Marker
@@ -132,6 +134,7 @@ function SightingMarker({
           <Text style={styles.calloutSubtitle}>
             {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
           </Text>
+          {extras ? <Text style={styles.calloutSubtitle}>{extras}</Text> : null}
           {sighting.notes ? <Text style={styles.calloutNotes}>{sighting.notes}</Text> : null}
         </View>
       </Callout>
