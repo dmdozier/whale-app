@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
@@ -29,6 +30,7 @@ export default function MapScreen() {
   // (or logged by someone else) shows up without needing to restart the app.
   useFocusEffect(
     useCallback(() => {
+      recordBreadcrumb('map:focus:fetch:start');
       supabase
         .from('sightings')
         .select(
@@ -40,7 +42,10 @@ export default function MapScreen() {
         // crash-prone) as the table grows. The most recent 500 sightings is
         // already far more than useful to look at on a map at once.
         .limit(500)
-        .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
+        .then(({ data }) => {
+          setSightings((data ?? []) as unknown as Sighting[]);
+          recordBreadcrumb(`map:focus:fetch:success count=${data?.length ?? 0}`);
+        });
     }, []),
   );
 

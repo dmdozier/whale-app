@@ -14,6 +14,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { useTheme } from '@/hooks/use-theme';
+import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { addPendingSighting, submitSighting } from '@/lib/offline-queue';
 import {
   DISTANCE_OPTIONS,
@@ -161,8 +162,13 @@ export default function LogSightingScreen() {
     };
 
     try {
+      await recordBreadcrumb(
+        `save:start locationType=${locationType} distanceEstimate=${distanceEstimate} hasPhoto=${!!photoUri}`,
+      );
       await submitSighting(pendingSighting);
+      await recordBreadcrumb('save:submitSighting:success');
       router.back();
+      await recordBreadcrumb('save:router.back:called');
     } catch (error) {
       // Logged so a real bug (not just "no connection") doesn't look
       // identical to a normal offline save — the previous bare `catch`

@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
 import { formatSightingExtras } from '@/lib/sighting-options';
@@ -37,13 +38,17 @@ export default function ListScreen() {
   // (or logged by someone else) shows up without needing to restart the app.
   useFocusEffect(
     useCallback(() => {
+      recordBreadcrumb('list:focus:fetch:start');
       supabase
         .from('sightings')
         .select(
           'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(common_name)',
         )
         .order('sighted_at', { ascending: false })
-        .then(({ data }) => setSightings((data ?? []) as unknown as Sighting[]));
+        .then(({ data }) => {
+          setSightings((data ?? []) as unknown as Sighting[]);
+          recordBreadcrumb(`list:focus:fetch:success count=${data?.length ?? 0}`);
+        });
     }, []),
   );
 
