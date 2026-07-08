@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 
+import { recordBreadcrumb } from '@/lib/breadcrumbs';
+
 const CACHE_KEY = 'whale-app/geocode-cache';
 // ~0.0001 degrees is roughly 11m. Labels can now resolve down to street/
 // landmark level, so the cache grid needs to be tight enough that two
@@ -53,13 +55,21 @@ export async function getLocationLabel(latitude: number, longitude: number): Pro
     return cache[key];
   }
 
+  // A cache hit resolves near-instantly (no native call at all), but a miss
+  // means an actual native reverseGeocodeAsync round-trip — worth knowing
+  // which one is happening here, since jittering duplicate coordinates
+  // means sightings that used to always hit the cache (identical
+  // coordinate to every other test from the same spot) can now miss.
+  recordBreadcrumb(`getLocationLabel:cache-miss:start key=${key}`);
   try {
     const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+    recordBreadcrumb(`getLocationLabel:cache-miss:success key=${key}`);
     const label = address ? formatAddress(address) : 'Unknown area';
     cache[key] = label;
     AsyncStorage.setItem(CACHE_KEY, JSON.stringify(cache));
     return label;
-  } catch {
+  } catch (error) {
+    recordBreadcrumb(`getLocationLabel:cache-miss:error key=${key} error=${error}`);
     return 'Unknown area';
   }
 }

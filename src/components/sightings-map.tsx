@@ -150,6 +150,17 @@ function SightingMarker({
     );
   }, [sighting.id, sighting.location_type, sighting.distance_estimate]);
 
+  // useLocationLabel resolves asynchronously after mount and updates this
+  // Callout's content from a "Locating…" placeholder to the real address —
+  // a second render/commit for this exact marker that nothing was tracking
+  // before this. Its absence would mean the crash happens somewhere in
+  // that update, not the initial mount.
+  useEffect(() => {
+    if (locationLabel !== null) {
+      recordBreadcrumb(`SightingMarker:locationLabel:committed id=${sighting.id}`);
+    }
+  }, [sighting.id, locationLabel]);
+
   return (
     <Marker
       coordinate={coordinate}
