@@ -7,6 +7,9 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AuthProvider } from '@/hooks/use-auth';
 import { useOfflineSync } from '@/hooks/use-offline-sync';
+import { installGlobalErrorHandlers } from '@/lib/global-error-handler';
+
+installGlobalErrorHandlers();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

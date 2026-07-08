@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Redirect, Stack, router } from 'expo-router';
@@ -84,6 +85,15 @@ export default function LogSightingScreen() {
     return <Redirect href="/" />;
   }
 
+  // Camera quality (0.5 above) only controls JPEG compression, not pixel
+  // dimensions — a full-resolution camera photo can still be many megabytes,
+  // and submitSighting has to read the whole thing into memory as an
+  // ArrayBuffer to upload it. A multi-MB image round-tripping through React
+  // Native's bridge more than once is a plausible source of an intermittent
+  // out-of-memory crash on save, so cap the longest edge here, right after
+  // capture, regardless of what resolution the camera produced.
+  const MAX_PHOTO_DIMENSION = 1600;
+
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
@@ -91,8 +101,30 @@ export default function LogSightingScreen() {
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.5 });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
+    if (result.canceled) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    if (asset.width <= MAX_PHOTO_DIMENSION && asset.height <= MAX_PHOTO_DIMENSION) {
+      setPhotoUri(asset.uri);
+      return;
+    }
+
+    try {
+      const resized = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        [
+          asset.width >= asset.height
+            ? { resize: { width: MAX_PHOTO_DIMENSION } }
+            : { resize: { height: MAX_PHOTO_DIMENSION } },
+        ],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG },
+      );
+      setPhotoUri(resized.uri);
+    } catch (error) {
+      console.error('[LogSighting] failed to resize photo, using original:', error);
+      setPhotoUri(asset.uri);
     }
   };
 
@@ -119,7 +151,12 @@ export default function LogSightingScreen() {
     try {
       await submitSighting(pendingSighting);
       router.back();
-    } catch {
+    } catch (error) {
+      // Logged so a real bug (not just "no connection") doesn't look
+      // identical to a normal offline save — the previous bare `catch`
+      // discarded the actual reason entirely, which made this flow
+      // impossible to diagnose from on-device logs.
+      console.error('[LogSighting] submitSighting failed, queuing offline:', error);
       // No connection (or a transient failure) — save it on-device instead
       // of losing it. The background sync picks it up once we're back online.
       await addPendingSighting(pendingSighting);

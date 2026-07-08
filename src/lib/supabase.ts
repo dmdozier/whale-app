@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
+
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -32,6 +34,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+  },
+  // Neither the storage nor database client applies a request timeout on
+  // its own, so a stalled connection (slow network, dropped mid-transfer)
+  // hangs indefinitely with no error — see fetch-with-timeout.ts.
+  global: {
+    fetch: fetchWithTimeout,
   },
 });
 

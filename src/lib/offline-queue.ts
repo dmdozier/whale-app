@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { fetchWithTimeout } from '@/lib/fetch-with-timeout';
 import { supabase } from '@/lib/supabase';
 
 const QUEUE_KEY = 'whale-app/pending-sightings';
@@ -51,14 +52,26 @@ export async function submitSighting(sighting: Omit<PendingSighting, 'status'>) 
   let photoUrl: string | null = null;
 
   if (sighting.photoUri) {
-    const photoResponse = await fetch(sighting.photoUri);
-    const photoData = await photoResponse.arrayBuffer();
+    let photoData: ArrayBuffer;
+    try {
+      const photoResponse = await fetchWithTimeout(sighting.photoUri);
+      photoData = await photoResponse.arrayBuffer();
+    } catch (error) {
+      // Logged with a stage tag (rather than left to whatever swallows this
+      // upstream) because a silent failure here previously looked identical
+      // to every other failure — no way to tell "couldn't read the photo
+      // file" from "network is down" from the on-device log.
+      console.error('[submitSighting] failed to read photo file:', sighting.clientId, error);
+      throw error;
+    }
+
     const photoPath = `${sighting.userId}/${sighting.clientId}.jpg`;
 
     const { error: uploadError } = await supabase.storage
       .from('sighting-photos')
       .upload(photoPath, photoData, { contentType: 'image/jpeg', upsert: true });
     if (uploadError) {
+      console.error('[submitSighting] photo upload failed:', sighting.clientId, uploadError);
       throw uploadError;
     }
 
@@ -80,6 +93,7 @@ export async function submitSighting(sighting: Omit<PendingSighting, 'status'>) 
   // reached the server on an earlier attempt — treat that as success rather
   // than retrying forever.
   if (insertError && insertError.code !== UNIQUE_VIOLATION) {
+    console.error('[submitSighting] row insert failed:', sighting.clientId, insertError);
     throw insertError;
   }
 }
@@ -98,8 +112,12 @@ export async function syncPendingSightings() {
       try {
         await submitSighting(sighting);
         await markSynced(sighting.clientId);
-      } catch {
-        // Leave it pending — the next sync pass (reconnect or app start) will retry.
+      } catch (error) {
+        // Leave it pending — the next sync pass (reconnect or app start)
+        // will retry. Logged so a sighting that's permanently failing
+        // (not just "currently offline") doesn't retry forever with zero
+        // visibility into why.
+        console.error('[syncPendingSightings] failed to sync sighting:', sighting.clientId, error);
       }
     }
   } finally {
