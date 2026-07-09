@@ -1,12 +1,13 @@
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, type Region } from 'react-native-maps';
+import Supercluster from 'supercluster';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
-import { jitterDuplicateCoordinates } from '@/lib/dedupe-coordinates';
+import { regionDeltaForZoomLevel, zoomLevelForRegion } from '@/lib/map-zoom';
 import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
 import type { Sighting } from '@/types/sighting';
@@ -18,6 +19,17 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 4,
 };
 
+// react-native-map-clustering's own native rendering was confirmed (by
+// direct on-device testing) to be the cause of a crash that took a long
+// investigation to isolate — it reliably reproduced right as new marker
+// data landed, and stopped entirely once that library was swapped out for
+// a plain MapView. Its underlying clustering math (supercluster, a pure-JS
+// library with no native/rendering code of its own) was never implicated,
+// so clustering is reimplemented here directly on top of supercluster,
+// with our own plain Marker/Callout rendering — the same clustering
+// behavior, with no third-party native rendering layer in the way.
+type SightingPointProperties = { sightingId: string };
+
 export function SightingsMap({
   sightings,
   onPhotoPress,
@@ -25,14 +37,19 @@ export function SightingsMap({
   sightings: Sighting[];
   onPhotoPress: (photoUrl: string) => void;
 }) {
-  // react-native-map-clustering only computes clusters on mount (from
-  // whatever region it starts at) and when the map reports a region change.
-  // Rendering it at DEFAULT_REGION and then imperatively animating to the
-  // user's location doesn't reliably fire that region-change callback, so
-  // clusters were stuck reflecting the wrong (far more zoomed-out) region
-  // until the user manually panned or pinched. Resolving the real starting
-  // region before the map ever mounts avoids that entirely.
+  const mapRef = useRef<MapView>(null);
+
+  // Clusters need to be computed for whatever region the map is actually
+  // showing (initialRegion is only read once, at mount, by react-native-maps
+  // itself — it doesn't reflect panning/zooming). Kept as separate state
+  // from initialRegion, and updated in three places: alongside
+  // initialRegion below, from onRegionChangeComplete as the user
+  // interacts with the map, and directly when animating to a tapped
+  // cluster (see handleClusterPress) rather than relying solely on
+  // onRegionChangeComplete, which doesn't reliably fire after
+  // animateToRegion.
   const [initialRegion, setInitialRegion] = useState<Region | null>(null);
+  const [visibleRegion, setVisibleRegion] = useState<Region | null>(null);
   // Bumped on every successful location fetch so the key below changes,
   // forcing a fresh mount of the map. That's what actually makes it
   // re-center — react-native-maps only reads `initialRegion` once per
@@ -50,17 +67,23 @@ export function SightingsMap({
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           setInitialRegion((current) => current ?? DEFAULT_REGION);
+          setVisibleRegion((current) => current ?? DEFAULT_REGION);
           return;
         }
         const position = await Location.getCurrentPositionAsync({});
-        setInitialRegion({
+        const region: Region = {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           latitudeDelta: 0.1,
           longitudeDelta: 0.1,
-        });
+        };
+        setInitialRegion(region);
+        setVisibleRegion(region);
         setMapKey((key) => key + 1);
-      })().catch(() => setInitialRegion((current) => current ?? DEFAULT_REGION));
+      })().catch(() => {
+        setInitialRegion((current) => current ?? DEFAULT_REGION);
+        setVisibleRegion((current) => current ?? DEFAULT_REGION);
+      });
     }, []),
   );
 
@@ -73,6 +96,59 @@ export function SightingsMap({
     recordBreadcrumb(`SightingsMap:render:committed count=${sightings.length} mapKey=${mapKey}`);
   });
 
+  const clusterIndex = useMemo(() => {
+    // The old crash was in react-native-map-clustering's own native
+    // rendering at high zoom, not in supercluster's clustering math (its
+    // own dedicated crash mitigation, capping maxZoom at 17, doesn't apply
+    // to our own plain Marker/Callout rendering) — confirmed via a
+    // standalone test that supercluster itself handles many same-spot
+    // points without issue well past that. maxZoom just bounds how deep
+    // the cluster hierarchy is precomputed, so 20 (the max real-world
+    // useful zoom) lets tightly-packed clusters fully expand when zoomed
+    // all the way in, rather than getting stuck a level or two up.
+    const index = new Supercluster<SightingPointProperties>({ maxZoom: 20 });
+    index.load(
+      sightings.map((sighting) => ({
+        type: 'Feature',
+        properties: { sightingId: sighting.id },
+        geometry: { type: 'Point', coordinates: [sighting.longitude, sighting.latitude] },
+      })),
+    );
+    return index;
+  }, [sightings]);
+
+  const sightingsById = useMemo(() => new Map(sightings.map((s) => [s.id, s])), [sightings]);
+
+  const clusters = useMemo(() => {
+    if (!visibleRegion) {
+      return [];
+    }
+    const bbox: [number, number, number, number] = [
+      visibleRegion.longitude - visibleRegion.longitudeDelta / 2,
+      visibleRegion.latitude - visibleRegion.latitudeDelta / 2,
+      visibleRegion.longitude + visibleRegion.longitudeDelta / 2,
+      visibleRegion.latitude + visibleRegion.latitudeDelta / 2,
+    ];
+    const zoom = zoomLevelForRegion(visibleRegion.longitudeDelta);
+    return clusterIndex.getClusters(bbox, zoom);
+  }, [clusterIndex, visibleRegion]);
+
+  const handleClusterPress = useCallback(
+    (clusterId: number, coordinate: { latitude: number; longitude: number }) => {
+      const expansionZoom = Math.min(clusterIndex.getClusterExpansionZoom(clusterId), 20);
+      const delta = regionDeltaForZoomLevel(expansionZoom);
+      const region: Region = {
+        latitude: coordinate.latitude,
+        longitude: coordinate.longitude,
+        latitudeDelta: delta,
+        longitudeDelta: delta,
+      };
+      mapRef.current?.animateToRegion(region, 300);
+      setVisibleRegion(region);
+    },
+    [clusterIndex],
+  );
+
   if (!initialRegion) {
     return (
       <View style={styles.loading}>
@@ -81,44 +157,44 @@ export function SightingsMap({
     );
   }
 
-  // See dedupe-coordinates.ts: sightings logged from the same spot (the
-  // norm when testing repeatedly, or at a popular viewing location) share
-  // an exact coordinate, which is suspected to be what crashes this
-  // library's native rendering when a new one is added to that cluster.
-  // Spreading duplicates apart by a few meters means it never sees an exact
-  // match in the first place.
-  const jitteredCoordinates = jitterDuplicateCoordinates(
-    sightings.map((sighting) => ({
-      id: sighting.id,
-      latitude: sighting.latitude,
-      longitude: sighting.longitude,
-    })),
-  );
-
-  // TEMPORARY DIAGNOSTIC: react-native-map-clustering swapped out for a
-  // plain MapView, with no clustering at all. Every "markers/Callouts
-  // updating" theory we could instrument from JS has been tried and ruled
-  // out by breadcrumb evidence, but the clustering library's own
-  // cluster-bubble rendering is entirely opaque to those breadcrumbs —
-  // it's third-party native code with no hook point for us to log
-  // anything from, and it already has a crash history in this exact app
-  // (this file used to disable its spiralEnabled/animationEnabled props
-  // for exactly that reason). If the crash stops with this in place, that
-  // conclusively points at the clustering library; if it doesn't, we can
-  // rule clustering out entirely with much more confidence than more
-  // guessing would give us. Revert to ClusteredMapView (git history has
-  // the exact prior version, including those props) once this test tells
-  // us which way to go.
   return (
-    <MapView key={mapKey} style={styles.map} initialRegion={initialRegion} showsUserLocation>
-      {sightings.map((sighting, index) => (
-        <SightingMarker
-          key={sighting.id}
-          sighting={sighting}
-          onPhotoPress={onPhotoPress}
-          coordinate={jitteredCoordinates[index]}
-        />
-      ))}
+    <MapView
+      ref={mapRef}
+      key={mapKey}
+      style={styles.map}
+      initialRegion={initialRegion}
+      showsUserLocation
+      onRegionChangeComplete={setVisibleRegion}>
+      {clusters.map((feature) => {
+        const [longitude, latitude] = feature.geometry.coordinates;
+
+        if ('cluster' in feature.properties) {
+          const { cluster_id: clusterId, point_count: pointCount } = feature.properties;
+          return (
+            <Marker
+              key={`cluster-${clusterId}`}
+              coordinate={{ latitude, longitude }}
+              onPress={() => handleClusterPress(clusterId, { latitude, longitude })}>
+              <View style={styles.clusterBadge}>
+                <Text style={styles.clusterBadgeText}>{pointCount}</Text>
+              </View>
+            </Marker>
+          );
+        }
+
+        const sighting = sightingsById.get(feature.properties.sightingId);
+        if (!sighting) {
+          return null;
+        }
+        return (
+          <SightingMarker
+            key={sighting.id}
+            sighting={sighting}
+            onPhotoPress={onPhotoPress}
+            coordinate={{ latitude, longitude }}
+          />
+        );
+      })}
     </MapView>
   );
 }
@@ -190,6 +266,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  clusterBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#208AEF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  clusterBadgeText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   callout: {
     minWidth: 160,
