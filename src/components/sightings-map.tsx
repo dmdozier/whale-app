@@ -133,18 +133,34 @@ export function SightingsMap({
     return clusterIndex.getClusters(bbox, zoom);
   }, [clusterIndex, visibleRegion]);
 
+  useEffect(() => {
+    const clusterCount = clusters.filter((f) => 'cluster' in f.properties).length;
+    recordBreadcrumb(
+      `clusters:recomputed total=${clusters.length} clusters=${clusterCount} points=${clusters.length - clusterCount} visibleRegionDelta=${visibleRegion?.longitudeDelta}`,
+    );
+  }, [clusters, visibleRegion]);
+
   const handleClusterPress = useCallback(
     (clusterId: number, coordinate: { latitude: number; longitude: number }) => {
-      const expansionZoom = Math.min(clusterIndex.getClusterExpansionZoom(clusterId), 20);
-      const delta = regionDeltaForZoomLevel(expansionZoom);
-      const region: Region = {
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        latitudeDelta: delta,
-        longitudeDelta: delta,
-      };
-      mapRef.current?.animateToRegion(region, 300);
-      setVisibleRegion(region);
+      recordBreadcrumb(`cluster:press id=${clusterId} hasMapRef=${!!mapRef.current}`);
+      try {
+        const rawExpansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
+        const expansionZoom = Math.min(rawExpansionZoom, 20);
+        const delta = regionDeltaForZoomLevel(expansionZoom);
+        const region: Region = {
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude,
+          latitudeDelta: delta,
+          longitudeDelta: delta,
+        };
+        recordBreadcrumb(
+          `cluster:press:region rawExpansionZoom=${rawExpansionZoom} delta=${delta} region=${JSON.stringify(region)}`,
+        );
+        mapRef.current?.animateToRegion(region, 300);
+        setVisibleRegion(region);
+      } catch (error) {
+        recordBreadcrumb(`cluster:press:error id=${clusterId} error=${error}`);
+      }
     },
     [clusterIndex],
   );
