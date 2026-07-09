@@ -36,13 +36,7 @@ const MIN_MEANINGFUL_MOVE_DEGREES = 0.0006;
 // behavior, with no third-party native rendering layer in the way.
 type SightingPointProperties = { sightingId: string };
 
-export function SightingsMap({
-  sightings,
-  onPhotoPress,
-}: {
-  sightings: Sighting[];
-  onPhotoPress: (photoUrl: string) => void;
-}) {
+export function SightingsMap({ sightings }: { sightings: Sighting[] }) {
   const mapRef = useRef<MapView>(null);
 
   // Clusters need to be computed for whatever region the map is actually
@@ -344,12 +338,7 @@ export function SightingsMap({
           return null;
         }
         return (
-          <SightingMarker
-            key={sighting.id}
-            sighting={sighting}
-            onPhotoPress={onPhotoPress}
-            coordinate={{ latitude, longitude }}
-          />
+          <SightingMarker key={sighting.id} sighting={sighting} coordinate={{ latitude, longitude }} />
         );
       })}
     </MapView>
@@ -359,11 +348,9 @@ export function SightingsMap({
 function SightingMarker({
   sighting,
   coordinate,
-  onPhotoPress,
 }: {
   sighting: Sighting;
   coordinate: { latitude: number; longitude: number };
-  onPhotoPress: (photoUrl: string) => void;
 }) {
   const recent = isRecentSighting(sighting.sighted_at);
   const locationLabel = useLocationLabel(coordinate);
@@ -418,9 +405,12 @@ function SightingMarker({
       // (plain NSString assignment, no React-rendered subview involved)
       // that isn't implicated in that bug. Trade-off: no photo or notes in
       // the map callout anymore -- both remain viewable from the List tab.
+      // No onCalloutPress either: it used to silently open the full-screen
+      // photo viewer on tap, but with no photo shown in the callout there's
+      // no visual cue that tapping it would do that -- a confusing leftover
+      // once the callout became plain text.
       title={sighting.species?.common_name ?? 'Species not noted'}
       description={calloutDescription}
-      onCalloutPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}
       // Opening a Callout by tapping its Marker is entirely native (MapKit).
       // onPress marks the tap; onDeselect marks whenever the Callout is
       // dismissed, whether by the user tapping elsewhere or by something
