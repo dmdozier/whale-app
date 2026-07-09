@@ -233,6 +233,21 @@ export function SightingsMap({
         // there. Anything higher is a zoom level animateToRegion can't
         // actually reach on this map, confirmed via breadcrumb evidence.
         const expansionZoom = Math.min(rawExpansionZoom, 20);
+        // If we're already at (or past) the zoom this cluster would expand
+        // to, there's nothing further to show -- this cluster is part of a
+        // same-spot group stuck at the zoom ceiling (see clusterIndex's
+        // comment). Breadcrumb evidence showed that tapping several such
+        // already-maxed sub-clusters in quick succession (8 taps in ~12s,
+        // each restarting a fresh animateToRegion) destabilizes MapKit's
+        // camera -- a chaotic run of unrelated region-change events showed
+        // up ~4s after the last tap, remounting markers and closing any open
+        // Callout. Skipping the redundant animation entirely avoids
+        // triggering that.
+        const currentZoom = visibleRegion ? zoomLevelForRegion(visibleRegion.longitudeDelta) : -1;
+        if (expansionZoom <= currentZoom) {
+          recordBreadcrumb(`cluster:press:already-at-max id=${clusterId} zoom=${currentZoom}`);
+          return;
+        }
         const delta = regionDeltaForZoomLevel(expansionZoom);
         const region: Region = {
           latitude: coordinate.latitude,
@@ -265,7 +280,7 @@ export function SightingsMap({
         recordBreadcrumb(`cluster:press:error id=${clusterId} error=${error}`);
       }
     },
-    [clusterIndex],
+    [clusterIndex, visibleRegion],
   );
 
   if (!initialRegion) {
