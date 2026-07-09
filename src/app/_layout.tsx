@@ -8,6 +8,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AuthProvider } from '@/hooks/use-auth';
 import { useOfflineSync } from '@/hooks/use-offline-sync';
+import { PhotoViewerProvider } from '@/hooks/use-photo-viewer';
 import { readAndClearBreadcrumbs } from '@/lib/breadcrumbs';
 import { installGlobalErrorHandlers } from '@/lib/global-error-handler';
 
@@ -40,16 +41,18 @@ export default function RootLayout() {
   return (
     <KeyboardProvider>
       <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="log-sighting"
-              options={{ presentation: 'modal', title: 'Log Sighting' }}
-            />
-          </Stack>
-        </ThemeProvider>
+        <PhotoViewerProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="log-sighting"
+                options={{ presentation: 'modal', title: 'Log Sighting' }}
+              />
+            </Stack>
+          </ThemeProvider>
+        </PhotoViewerProvider>
       </AuthProvider>
     </KeyboardProvider>
   );

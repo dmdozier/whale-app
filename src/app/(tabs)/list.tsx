@@ -6,12 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
-import { PhotoViewerModal } from '@/components/photo-viewer-modal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { usePhotoViewer } from '@/hooks/use-photo-viewer';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
@@ -31,8 +31,8 @@ export default function ListScreen() {
   );
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
-  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const pendingCount = usePendingSightingsCount();
+  const { openPhoto } = usePhotoViewer();
 
   // Refetch whenever the List tab gains focus, so a sighting just logged
   // (or logged by someone else) shows up without needing to restart the app.
@@ -105,7 +105,7 @@ export default function ListScreen() {
               sighting={item}
               userLocation={userLocation}
               onPress={() => setSelectedSighting(item)}
-              onPhotoPress={setViewingPhotoUrl}
+              onPhotoPress={openPhoto}
             />
           )}
         />
@@ -124,12 +124,24 @@ export default function ListScreen() {
         onRequestClose={() => setSelectedSighting(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedSighting(null)}>
           {selectedSighting ? (
-            <SightingDetail sighting={selectedSighting} onPhotoPress={setViewingPhotoUrl} />
+            <SightingDetail
+              sighting={selectedSighting}
+              // Closes this local Modal before opening the shared photo
+              // viewer, rather than leaving it open underneath. Two RN
+              // Modals presented at once on iOS (one native view controller
+              // stacked on another) is what caused the reported bug where
+              // the photo viewer's close button became unreliable and the
+              // List screen went completely unresponsive afterward -- see
+              // use-photo-viewer.tsx for the other half of this (Map and
+              // List used to each mount their own separate photo viewer).
+              onPhotoPress={(photoUrl) => {
+                setSelectedSighting(null);
+                openPhoto(photoUrl);
+              }}
+            />
           ) : null}
         </Pressable>
       </Modal>
-
-      <PhotoViewerModal photoUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
     </ThemedView>
   );
 }

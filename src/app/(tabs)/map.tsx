@@ -5,12 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DateFilterButton } from '@/components/date-filter-button';
 import { LogoutButton } from '@/components/logout-button';
-import { PhotoViewerModal } from '@/components/photo-viewer-modal';
 import { SightingsMap } from '@/components/sightings-map';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
+import { usePhotoViewer } from '@/hooks/use-photo-viewer';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
 import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { supabase } from '@/lib/supabase';
@@ -26,8 +26,8 @@ export default function MapScreen() {
   // clutter and rendering/clustering cost, especially during repeated
   // same-spot test saves that otherwise stack up indefinitely on the map.
   const [dateFilter, setDateFilter] = useState<DateFilter>('hour');
-  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const pendingCount = usePendingSightingsCount();
+  const { openPhoto } = usePhotoViewer();
 
   // Refetch whenever the Map tab gains focus, so a sighting just logged
   // (or logged by someone else) shows up without needing to restart the app.
@@ -77,7 +77,7 @@ export default function MapScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SightingsMap sightings={filteredSightings} onPhotoPress={setViewingPhotoUrl} />
+      <SightingsMap sightings={filteredSightings} onPhotoPress={openPhoto} />
 
       <SafeAreaView edges={['top']} style={styles.filterBarSafeArea}>
         <DateFilterButton value={dateFilter} onChange={setDateFilter} />
@@ -96,8 +96,6 @@ export default function MapScreen() {
       <Pressable style={styles.fab} onPress={() => router.push('/log-sighting')}>
         <ThemedText style={styles.fabText}>I saw one 🐋</ThemedText>
       </Pressable>
-
-      <PhotoViewerModal photoUrl={viewingPhotoUrl} onClose={() => setViewingPhotoUrl(null)} />
     </ThemedView>
   );
 }
