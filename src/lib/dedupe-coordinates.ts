@@ -10,10 +10,14 @@ const COORD_PRECISION = 5;
 // as a real problem: an earlier, larger value scattered same-spot pins
 // tens of meters apart on screen). Separation at high zoom only needs to
 // clear supercluster's clustering radius, which shrinks to sub-meter well
-// before maxZoom (22, see sightings-map.tsx) — a small jitter is still
-// enough to fully resolve given enough zoom depth, it just takes it
-// slightly more zooming in to become visible, which is normal, expected
-// clustering behavior rather than a display accuracy problem.
+// before maxZoom (20, see sightings-map.tsx — capped there to match the
+// tightest zoom MapKit's animateToRegion will actually reach on-device) —
+// a small jitter is still enough to fully resolve given enough zoom depth,
+// it just takes it slightly more zooming in to become visible, which is
+// normal, expected clustering behavior rather than a display accuracy
+// problem. Duplicates too close together to separate within that zoom
+// ceiling stay grouped in a cluster badge permanently — an accepted
+// trade-off, see the BACKLOG.md note on this.
 const JITTER_DEGREES = 0.00002;
 // The golden angle — the standard increment for spacing N points around a
 // spiral (Vogel's model / sunflower phyllotaxis), giving close-to-optimal,

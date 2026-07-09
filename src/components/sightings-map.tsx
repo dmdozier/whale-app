@@ -159,18 +159,22 @@ export function SightingsMap({
   }, []);
 
   const clusterIndex = useMemo(() => {
-    // The old crash was in react-native-map-clustering's own native
-    // rendering at high zoom, not in supercluster's clustering math (its
-    // own dedicated crash mitigation, capping maxZoom at 17, doesn't apply
-    // to our own plain Marker/Callout rendering) — confirmed via a
-    // standalone test that supercluster itself handles many same-spot
-    // points without issue well past that. maxZoom just bounds how deep
-    // the cluster hierarchy is precomputed; real test sightings a few
-    // meters to tens of meters apart (ordinary GPS variance from repeated
-    // testing near the same spot, not exact duplicates) needed the full
-    // depth of a 20-level index to fully separate, so 22 leaves real
-    // headroom rather than sitting right at the edge.
-    const index = new Supercluster<SightingPointProperties>({ maxZoom: 22 });
+    // maxZoom bounds how deep the cluster hierarchy is precomputed, and
+    // therefore the tightest zoom handleClusterPress will ever ask
+    // animateToRegion to reach. This used to be 22 (supercluster itself
+    // handles that depth fine, and separating same-spot test sightings
+    // seemed to need it), but on-device breadcrumb evidence showed
+    // animateToRegion reliably reaches zoom 19-20 (matching
+    // clusters:recomputed within under a second, every time) and reliably
+    // does NOT reach zoom 21-22 — repeated taps requesting those deltas
+    // produced no response at all for many seconds, then a long, chaotic
+    // tail of unrelated-looking region-change events as the camera
+    // eventually caught up, remounting markers (and closing any open
+    // Callout) repeatedly along the way. 20 is the real ceiling MapKit
+    // will honor here; asking for more doesn't get sightings separated,
+    // it just leaves cluster taps looking unresponsive and destabilizes
+    // the map for seconds afterward.
+    const index = new Supercluster<SightingPointProperties>({ maxZoom: 20 });
     // Sightings sharing the exact same coordinate (repeated test saves, or
     // a phone returning a cached GPS reading) can never be spatially
     // separated by clustering alone — see dedupe-coordinates.ts. Without
@@ -225,7 +229,10 @@ export function SightingsMap({
       recordBreadcrumb(`cluster:press id=${clusterId} hasMapRef=${!!mapRef.current}`);
       try {
         const rawExpansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
-        const expansionZoom = Math.min(rawExpansionZoom, 22);
+        // Capped to 20 to match clusterIndex's maxZoom — see the comment
+        // there. Anything higher is a zoom level animateToRegion can't
+        // actually reach on this map, confirmed via breadcrumb evidence.
+        const expansionZoom = Math.min(rawExpansionZoom, 20);
         const delta = regionDeltaForZoomLevel(expansionZoom);
         const region: Region = {
           latitude: coordinate.latitude,
