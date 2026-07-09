@@ -394,7 +394,21 @@ function SightingMarker({
     <Marker
       coordinate={coordinate}
       pinColor={recent ? '#208AEF' : '#9AA0A6'}
-      opacity={recent ? 1 : 0.55}>
+      opacity={recent ? 1 : 0.55}
+      // Opening a Callout by tapping its Marker is entirely native (MapKit)
+      // -- nothing in this file previously got a callback for it, only for
+      // tapping content inside an already-open Callout. That left a real
+      // blind spot: reports of a Callout "briefly displaying and then
+      // disappearing" (or the app going down around that moment) had no
+      // breadcrumb marking when the tap itself happened, or when iOS
+      // deselected it afterward. onPress marks the tap; onDeselect marks
+      // whenever the Callout is dismissed, whether by the user tapping
+      // elsewhere or by something else forcing it closed -- letting the
+      // next trail show whether a deselect lines up with a re-cluster/
+      // remount (already-known mechanism) or happens with no such event
+      // nearby (a different, still-unknown cause).
+      onPress={() => recordBreadcrumb(`SightingMarker:press id=${sighting.id}`)}
+      onDeselect={() => recordBreadcrumb(`SightingMarker:deselect id=${sighting.id}`)}>
       <Callout onPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}>
         <View style={styles.callout}>
           {sighting.photo_url ? (
