@@ -88,14 +88,30 @@ export function SightingsMap({
     }, []),
   );
 
-  // Fires after every render commits (no dependency array) — narrows down
-  // whether a crash happens before React finishes reconciling this
-  // component's JS-side tree, or later, when the native side actually
-  // creates/lays out the corresponding map/marker views (a separate,
-  // asynchronously-batched step that this breadcrumb can't see into).
-  useEffect(() => {
-    recordBreadcrumb(`SightingsMap:render:committed count=${sightings.length} mapKey=${mapKey}`);
-  });
+  // Only updates visibleRegion (and therefore triggers a re-cluster and a
+  // re-render of every marker) when the region actually changed by a
+  // meaningful amount. onRegionChangeComplete fires far more often than
+  // "the user panned or zoomed" — e.g. iOS auto-nudges the map to keep a
+  // just-tapped Callout fully on-screen, reported a region differing from
+  // the current one only in the 13th decimal place (confirmed via
+  // breadcrumb evidence: visibleRegionDelta 0.00034332275390625 vs.
+  // 0.00034332275389203915 between consecutive events). Recomputing
+  // clusters for that unmounts/remounts markers for no reason — including,
+  // apparently, the one whose Callout just opened, closing it again
+  // immediately.
+  const handleRegionChangeComplete = useCallback((region: Region) => {
+    setVisibleRegion((current) => {
+      if (!current) {
+        return region;
+      }
+      const zoomChanged =
+        zoomLevelForRegion(region.longitudeDelta) !== zoomLevelForRegion(current.longitudeDelta);
+      const latMoved = Math.abs(region.latitude - current.latitude) > current.latitudeDelta * 0.1;
+      const lngMoved =
+        Math.abs(region.longitude - current.longitude) > current.longitudeDelta * 0.1;
+      return zoomChanged || latMoved || lngMoved ? region : current;
+    });
+  }, []);
 
   const clusterIndex = useMemo(() => {
     // The old crash was in react-native-map-clustering's own native
@@ -104,10 +120,12 @@ export function SightingsMap({
     // to our own plain Marker/Callout rendering) — confirmed via a
     // standalone test that supercluster itself handles many same-spot
     // points without issue well past that. maxZoom just bounds how deep
-    // the cluster hierarchy is precomputed, so 20 (the max real-world
-    // useful zoom) lets tightly-packed clusters fully expand when zoomed
-    // all the way in, rather than getting stuck a level or two up.
-    const index = new Supercluster<SightingPointProperties>({ maxZoom: 20 });
+    // the cluster hierarchy is precomputed; real test sightings a few
+    // meters to tens of meters apart (ordinary GPS variance from repeated
+    // testing near the same spot, not exact duplicates) needed the full
+    // depth of a 20-level index to fully separate, so 22 leaves real
+    // headroom rather than sitting right at the edge.
+    const index = new Supercluster<SightingPointProperties>({ maxZoom: 22 });
     // Sightings sharing the exact same coordinate (repeated test saves, or
     // a phone returning a cached GPS reading) can never be spatially
     // separated by clustering alone — see dedupe-coordinates.ts. Without
@@ -162,7 +180,7 @@ export function SightingsMap({
       recordBreadcrumb(`cluster:press id=${clusterId} hasMapRef=${!!mapRef.current}`);
       try {
         const rawExpansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
-        const expansionZoom = Math.min(rawExpansionZoom, 20);
+        const expansionZoom = Math.min(rawExpansionZoom, 22);
         const delta = regionDeltaForZoomLevel(expansionZoom);
         const region: Region = {
           latitude: coordinate.latitude,
@@ -197,7 +215,7 @@ export function SightingsMap({
       style={styles.map}
       initialRegion={initialRegion}
       showsUserLocation
-      onRegionChangeComplete={setVisibleRegion}>
+      onRegionChangeComplete={handleRegionChangeComplete}>
       {clusters.map((feature) => {
         const [longitude, latitude] = feature.geometry.coordinates;
 
