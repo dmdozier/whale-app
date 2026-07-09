@@ -99,18 +99,45 @@ export function SightingsMap({
   // clusters for that unmounts/remounts markers for no reason — including,
   // apparently, the one whose Callout just opened, closing it again
   // immediately.
-  const handleRegionChangeComplete = useCallback((region: Region) => {
-    setVisibleRegion((current) => {
-      if (!current) {
-        return region;
+  //
+  // Debounced on top of that: a single continuous gesture (e.g. a fast
+  // pinch-to-zoom-out) fires onRegionChangeComplete multiple times, not
+  // once at the end — confirmed via breadcrumb evidence showing
+  // visibleRegionDelta jumping through several genuinely different values
+  // within about a second, each one a full re-cluster with a dramatically
+  // different marker set (mounting/unmounting dozens of markers as
+  // clusters collapsed from several down to one). That's heavy native
+  // work repeated several times in a row for what's really one user
+  // gesture, and a plausible source of the reported crash. Waiting for
+  // the region to stop changing for a brief moment means only the final,
+  // settled region actually triggers a re-cluster.
+  const regionChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (regionChangeTimeoutRef.current) {
+        clearTimeout(regionChangeTimeoutRef.current);
       }
-      const zoomChanged =
-        zoomLevelForRegion(region.longitudeDelta) !== zoomLevelForRegion(current.longitudeDelta);
-      const latMoved = Math.abs(region.latitude - current.latitude) > current.latitudeDelta * 0.1;
-      const lngMoved =
-        Math.abs(region.longitude - current.longitude) > current.longitudeDelta * 0.1;
-      return zoomChanged || latMoved || lngMoved ? region : current;
-    });
+    };
+  }, []);
+
+  const handleRegionChangeComplete = useCallback((region: Region) => {
+    if (regionChangeTimeoutRef.current) {
+      clearTimeout(regionChangeTimeoutRef.current);
+    }
+    regionChangeTimeoutRef.current = setTimeout(() => {
+      setVisibleRegion((current) => {
+        if (!current) {
+          return region;
+        }
+        const zoomChanged =
+          zoomLevelForRegion(region.longitudeDelta) !== zoomLevelForRegion(current.longitudeDelta);
+        const latMoved = Math.abs(region.latitude - current.latitude) > current.latitudeDelta * 0.1;
+        const lngMoved =
+          Math.abs(region.longitude - current.longitude) > current.longitudeDelta * 0.1;
+        return zoomChanged || latMoved || lngMoved ? region : current;
+      });
+    }, 200);
   }, []);
 
   const clusterIndex = useMemo(() => {
