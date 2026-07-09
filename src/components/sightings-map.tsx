@@ -329,6 +329,7 @@ export function SightingsMap({
           return (
             <Marker
               key={`cluster-${clusterId}`}
+              identifier={`cluster-${clusterId}`}
               coordinate={{ latitude, longitude }}
               onPress={() => handleClusterPress(clusterId, { latitude, longitude })}>
               <View style={styles.clusterBadge}>
@@ -393,6 +394,20 @@ function SightingMarker({
   return (
     <Marker
       coordinate={coordinate}
+      identifier={sighting.id}
+      // MapKit pools native annotation views for reuse (like a
+      // UITableViewCell) keyed by this identifier, independently of React's
+      // own key-based reconciliation -- React's key only controls whether
+      // the JS-side component instance is reused, not whether the
+      // underlying native view (and its rendered Callout content) gets
+      // recycled. Every Marker previously left this unset, meaning they
+      // likely all shared the same default identifier and were eligible to
+      // reuse each other's native views/Callouts. Confirmed via breadcrumb
+      // evidence: tapping a pin correctly logged its own id every time (so
+      // React's state was never wrong), yet the Callout content shown was
+      // sometimes a different, previously-selected sighting's photo --
+      // exactly what stale native view reuse would produce, and something
+      // no JS-level state fix could address.
       pinColor={recent ? '#208AEF' : '#9AA0A6'}
       opacity={recent ? 1 : 0.55}
       // Opening a Callout by tapping its Marker is entirely native (MapKit)
