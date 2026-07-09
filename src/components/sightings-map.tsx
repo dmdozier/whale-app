@@ -1,8 +1,8 @@
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
-import MapView, { Callout, Marker, type Region } from 'react-native-maps';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import MapView, { Marker, type Region } from 'react-native-maps';
 import Supercluster from 'supercluster';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
@@ -391,55 +391,45 @@ function SightingMarker({
     }
   }, [sighting.id, locationLabel]);
 
+  const calloutDescription = [
+    `${formatRelativeTime(sighting.sighted_at)} · ${locationLabel ?? 'Locating…'}`,
+    extras,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <Marker
       coordinate={coordinate}
       identifier={sighting.id}
-      // MapKit pools native annotation views for reuse (like a
-      // UITableViewCell) keyed by this identifier, independently of React's
-      // own key-based reconciliation -- React's key only controls whether
-      // the JS-side component instance is reused, not whether the
-      // underlying native view (and its rendered Callout content) gets
-      // recycled. Every Marker previously left this unset, meaning they
-      // likely all shared the same default identifier and were eligible to
-      // reuse each other's native views/Callouts. Confirmed via breadcrumb
-      // evidence: tapping a pin correctly logged its own id every time (so
-      // React's state was never wrong), yet the Callout content shown was
-      // sometimes a different, previously-selected sighting's photo --
-      // exactly what stale native view reuse would produce, and something
-      // no JS-level state fix could address.
       pinColor={recent ? '#208AEF' : '#9AA0A6'}
       opacity={recent ? 1 : 0.55}
-      // Opening a Callout by tapping its Marker is entirely native (MapKit)
-      // -- nothing in this file previously got a callback for it, only for
-      // tapping content inside an already-open Callout. That left a real
-      // blind spot: reports of a Callout "briefly displaying and then
-      // disappearing" (or the app going down around that moment) had no
-      // breadcrumb marking when the tap itself happened, or when iOS
-      // deselected it afterward. onPress marks the tap; onDeselect marks
-      // whenever the Callout is dismissed, whether by the user tapping
-      // elsewhere or by something else forcing it closed -- letting the
-      // next trail show whether a deselect lines up with a re-cluster/
-      // remount (already-known mechanism) or happens with no such event
-      // nearby (a different, still-unknown cause).
+      // Plain native title/subtitle callout rather than a custom child
+      // view. react-native-maps' iOS implementation renders every custom
+      // Callout's content through ONE shared view (SMCalloutView, created
+      // once per map) that's reassigned on every tap -- a long-standing,
+      // unresolved upstream bug (react-native-maps#2922, #4814) where that
+      // reassignment can end up showing a previous marker's content.
+      // Confirmed on-device via breadcrumb evidence that this app's own
+      // React/JS state was correct throughout (SightingMarker:press always
+      // logged the actually-tapped sighting's own id) -- the staleness is
+      // native, in a third-party library file, not fixable from here.
+      // title/description route through a separate, simpler native path
+      // (plain NSString assignment, no React-rendered subview involved)
+      // that isn't implicated in that bug. Trade-off: no photo or notes in
+      // the map callout anymore -- both remain viewable from the List tab.
+      title={sighting.species?.common_name ?? 'Species not noted'}
+      description={calloutDescription}
+      onCalloutPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}
+      // Opening a Callout by tapping its Marker is entirely native (MapKit).
+      // onPress marks the tap; onDeselect marks whenever the Callout is
+      // dismissed, whether by the user tapping elsewhere or by something
+      // else forcing it closed -- kept as a diagnostic even after moving
+      // off custom Callout content, since the underlying selection
+      // lifecycle is unchanged.
       onPress={() => recordBreadcrumb(`SightingMarker:press id=${sighting.id}`)}
-      onDeselect={() => recordBreadcrumb(`SightingMarker:deselect id=${sighting.id}`)}>
-      <Callout onPress={() => sighting.photo_url && onPhotoPress(sighting.photo_url)}>
-        <View style={styles.callout}>
-          {sighting.photo_url ? (
-            <Image source={{ uri: sighting.photo_url }} style={styles.calloutPhoto} />
-          ) : null}
-          <Text style={styles.calloutTitle}>
-            {sighting.species?.common_name ?? 'Species not noted'}
-          </Text>
-          <Text style={styles.calloutSubtitle}>
-            {formatRelativeTime(sighting.sighted_at)} · {locationLabel ?? 'Locating…'}
-          </Text>
-          {extras ? <Text style={styles.calloutSubtitle}>{extras}</Text> : null}
-          {sighting.notes ? <Text style={styles.calloutNotes}>{sighting.notes}</Text> : null}
-        </View>
-      </Callout>
-    </Marker>
+      onDeselect={() => recordBreadcrumb(`SightingMarker:deselect id=${sighting.id}`)}
+    />
   );
 }
 
@@ -466,30 +456,5 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 14,
-  },
-  callout: {
-    minWidth: 160,
-    maxWidth: 240,
-    gap: 2,
-  },
-  calloutPhoto: {
-    width: '100%',
-    height: 90,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  calloutTitle: {
-    fontWeight: '700',
-    fontSize: 14,
-    color: '#1A1A1A',
-  },
-  calloutSubtitle: {
-    fontSize: 12,
-    color: '#6B6B6B',
-  },
-  calloutNotes: {
-    fontSize: 12,
-    color: '#1A1A1A',
-    marginTop: 4,
   },
 });
