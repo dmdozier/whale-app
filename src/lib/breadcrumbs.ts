@@ -25,6 +25,15 @@ let writeQueue: Promise<void> = Promise.resolve();
 
 export function recordBreadcrumb(label: string): Promise<void> {
   const entry = `${new Date().toISOString()} ${label}`;
+  // Also print live, not just persist -- so a breadcrumb is visible in
+  // Metro's terminal the instant it happens instead of only after the app
+  // restarts (whether from a manual reload or an actual crash). The
+  // persisted copy below is still the one that matters for a true native
+  // crash, which tears the process down before anything queued for the
+  // terminal can flush -- this is purely a convenience for live testing.
+  if (__DEV__) {
+    console.log(`[breadcrumb] ${entry}`);
+  }
   writeQueue = writeQueue.catch(() => {}).then(async () => {
     try {
       const raw = await AsyncStorage.getItem(BREADCRUMBS_KEY);
