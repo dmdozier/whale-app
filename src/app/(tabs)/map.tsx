@@ -22,7 +22,10 @@ const LOGOUT_BUTTON_OFFSET = 40;
 
 export default function MapScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
-  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  // Defaults to the last hour rather than all time -- reduces visual
+  // clutter and rendering/clustering cost, especially during repeated
+  // same-spot test saves that otherwise stack up indefinitely on the map.
+  const [dateFilter, setDateFilter] = useState<DateFilter>('hour');
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const pendingCount = usePendingSightingsCount();
 
