@@ -2,8 +2,7 @@ import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
-import ClusteredMapView from 'react-native-map-clustering';
-import { Callout, Marker, type Region } from 'react-native-maps';
+import MapView, { Callout, Marker, type Region } from 'react-native-maps';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
@@ -96,37 +95,31 @@ export function SightingsMap({
     })),
   );
 
+  // TEMPORARY DIAGNOSTIC: react-native-map-clustering swapped out for a
+  // plain MapView, with no clustering at all. Every "markers/Callouts
+  // updating" theory we could instrument from JS has been tried and ruled
+  // out by breadcrumb evidence, but the clustering library's own
+  // cluster-bubble rendering is entirely opaque to those breadcrumbs —
+  // it's third-party native code with no hook point for us to log
+  // anything from, and it already has a crash history in this exact app
+  // (this file used to disable its spiralEnabled/animationEnabled props
+  // for exactly that reason). If the crash stops with this in place, that
+  // conclusively points at the clustering library; if it doesn't, we can
+  // rule clustering out entirely with much more confidence than more
+  // guessing would give us. Revert to ClusteredMapView (git history has
+  // the exact prior version, including those props) once this test tells
+  // us which way to go.
   return (
-    <ClusteredMapView
-      key={mapKey}
-      style={styles.map}
-      initialRegion={initialRegion}
-      showsUserLocation
-      clusterColor="#208AEF"
-      clusterTextColor="#ffffff"
-      // Rapid/extreme zooming with this library is a known source of native
-      // crashes on Android (see e.g. react-native-maps#5516 and similar
-      // reports against react-native-map-clustering) — it's tied to the
-      // "spiderfy" animation it runs when many markers share ~the same spot
-      // at high zoom, and to LayoutAnimation firing on every region change.
-      // Sightings logged from the same popular viewing spot are exactly the
-      // case that triggers it, so disable both rather than just hoping it
-      // doesn't come up, and cap how far in clustering bothers to recompute.
-      spiralEnabled={false}
-      animationEnabled={false}
-      maxZoom={17}>
+    <MapView key={mapKey} style={styles.map} initialRegion={initialRegion} showsUserLocation>
       {sightings.map((sighting, index) => (
         <SightingMarker
           key={sighting.id}
           sighting={sighting}
           onPhotoPress={onPhotoPress}
-          // react-native-map-clustering detects which children to cluster by
-          // duck-typing a `coordinate` prop directly on each one — it doesn't
-          // check the component type, so this has to be set here.
           coordinate={jitteredCoordinates[index]}
         />
       ))}
-    </ClusteredMapView>
+    </MapView>
   );
 }
 
