@@ -3,7 +3,7 @@ import 'react-native-url-polyfill/auto';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { Alert, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { AuthProvider } from '@/hooks/use-auth';
@@ -20,9 +20,11 @@ export default function RootLayout() {
   // Debug-only: if the previous session left breadcrumbs behind (see
   // src/lib/breadcrumbs.ts), it means the app didn't get to clear them on
   // its own — most likely because it was killed by something that gave the
-  // JS side no chance to run any cleanup, e.g. a native crash. Surfacing
-  // them as an Alert means they're visible directly on-device, with no
-  // Mac, crash log, or terminal connection required.
+  // JS side no chance to run any cleanup, e.g. a native crash. Printed to
+  // the console (Metro's terminal) rather than an on-screen Alert -- live
+  // breadcrumbs are now also console.log'd as they happen (see
+  // breadcrumbs.ts), so the terminal is already the primary place to watch
+  // for this, and a startup Alert was more disruptive than useful.
   useEffect(() => {
     if (!__DEV__) {
       return;
@@ -32,7 +34,6 @@ export default function RootLayout() {
         return;
       }
       console.log('[Breadcrumbs from previous session]', trail);
-      Alert.alert('Previous session breadcrumbs', trail.join('\n'));
     });
   }, []);
 
