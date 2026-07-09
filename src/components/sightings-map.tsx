@@ -20,6 +20,11 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 4,
 };
 
+// See handleRegionChangeComplete: an absolute-degrees floor (~50-65m) for
+// what counts as a "meaningful" region change, on top of the existing
+// relative (10% of current delta) check.
+const MIN_MEANINGFUL_MOVE_DEGREES = 0.0006;
+
 // react-native-map-clustering's own native rendering was confirmed (by
 // direct on-device testing) to be the cause of a crash that took a long
 // investigation to isolate — it reliably reproduced right as new marker
@@ -100,6 +105,22 @@ export function SightingsMap({
   // apparently, the one whose Callout just opened, closing it again
   // immediately.
   //
+  // The move threshold used to be purely relative (10% of the current
+  // delta). That works at ordinary zoom levels, but breaks down at the
+  // very tight zoom cluster taps can reach (delta ~0.0003, ~35m across):
+  // iOS's real, physical callout-visibility auto-pan is roughly a fixed
+  // number of meters regardless of zoom, so at this scale it can easily
+  // exceed 10% of the (tiny) visible span even though it's the same kind
+  // of trivial adjustment the guard was built to filter out. Confirmed via
+  // breadcrumb evidence: after settling on the same tightly-packed cluster
+  // (delta ~0.00034) with no further cluster taps, clusters:recomputed
+  // kept firing intermittently for nearly 90 seconds — consistent with the
+  // user tapping individual pins to test their Callouts, each one
+  // triggering a "meaningful" region change and a disruptive re-cluster.
+  // MIN_MEANINGFUL_MOVE_DEGREES (module scope, above) is an absolute floor
+  // added on top of the relative check so a real auto-pan doesn't clear
+  // the bar just because the current view happens to be extremely small.
+  //
   // Debounced on top of that: a single continuous gesture (e.g. a fast
   // pinch-to-zoom-out) fires onRegionChangeComplete multiple times, not
   // once at the end — confirmed via breadcrumb evidence showing
@@ -144,9 +165,10 @@ export function SightingsMap({
         }
         const zoomChanged =
           zoomLevelForRegion(region.longitudeDelta) !== zoomLevelForRegion(current.longitudeDelta);
-        const latMoved = Math.abs(region.latitude - current.latitude) > current.latitudeDelta * 0.1;
-        const lngMoved =
-          Math.abs(region.longitude - current.longitude) > current.longitudeDelta * 0.1;
+        const latThreshold = Math.max(current.latitudeDelta * 0.1, MIN_MEANINGFUL_MOVE_DEGREES);
+        const lngThreshold = Math.max(current.longitudeDelta * 0.1, MIN_MEANINGFUL_MOVE_DEGREES);
+        const latMoved = Math.abs(region.latitude - current.latitude) > latThreshold;
+        const lngMoved = Math.abs(region.longitude - current.longitude) > lngThreshold;
         return zoomChanged || latMoved || lngMoved ? region : current;
       });
       // 350ms rather than 200ms: a reported crash following a fast zoom-in
