@@ -7,6 +7,7 @@ import Supercluster from 'supercluster';
 
 import { useLocationLabel } from '@/hooks/use-location-label';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
+import { jitterDuplicateCoordinates } from '@/lib/dedupe-coordinates';
 import { regionDeltaForZoomLevel, zoomLevelForRegion } from '@/lib/map-zoom';
 import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime, isRecentSighting } from '@/lib/sighting-time';
@@ -107,11 +108,27 @@ export function SightingsMap({
     // useful zoom) lets tightly-packed clusters fully expand when zoomed
     // all the way in, rather than getting stuck a level or two up.
     const index = new Supercluster<SightingPointProperties>({ maxZoom: 20 });
-    index.load(
+    // Sightings sharing the exact same coordinate (repeated test saves, or
+    // a phone returning a cached GPS reading) can never be spatially
+    // separated by clustering alone — see dedupe-coordinates.ts. Without
+    // this, a cluster made entirely of duplicates gets stuck permanently:
+    // tapping it to zoom in just re-clusters the same points at every
+    // zoom level, with no way to ever reach the pins underneath.
+    const jitteredCoordinates = jitterDuplicateCoordinates(
       sightings.map((sighting) => ({
+        id: sighting.id,
+        latitude: sighting.latitude,
+        longitude: sighting.longitude,
+      })),
+    );
+    index.load(
+      sightings.map((sighting, i) => ({
         type: 'Feature',
         properties: { sightingId: sighting.id },
-        geometry: { type: 'Point', coordinates: [sighting.longitude, sighting.latitude] },
+        geometry: {
+          type: 'Point',
+          coordinates: [jitteredCoordinates[i].longitude, jitteredCoordinates[i].latitude],
+        },
       })),
     );
     return index;
