@@ -1,14 +1,20 @@
 type Coordinate = { latitude: number; longitude: number };
 type IdentifiedCoordinate = Coordinate & { id: string };
 
-// ~0.11m of precision — close enough to treat as "the same point" given GPS
-// noise, without accidentally merging two genuinely distinct nearby sightings.
-const COORD_PRECISION = 6;
-// ~14-16m at mid-latitudes — large enough that jittered duplicates clear
-// supercluster's clustering radius at an achievable zoom level (~17-18),
-// rather than requiring the very edge of what a real MapView can zoom to.
-// See the comment on jitterDuplicateCoordinates for how this was picked.
-const JITTER_DEGREES = 0.00015;
+// ~0.9-1.1m of precision at mid-latitudes — wide enough to catch two GPS
+// readings of "the same physical spot" (ordinary sensor noise between two
+// saves), without merging genuinely distinct nearby sightings.
+const COORD_PRECISION = 5;
+// ~1.8-2.2m at mid-latitudes. Kept intentionally small — a large jitter
+// visually misrepresents where a sighting was actually logged (confirmed
+// as a real problem: an earlier, larger value scattered same-spot pins
+// tens of meters apart on screen). Separation at high zoom only needs to
+// clear supercluster's clustering radius, which shrinks to sub-meter well
+// before maxZoom (22, see sightings-map.tsx) — a small jitter is still
+// enough to fully resolve given enough zoom depth, it just takes it
+// slightly more zooming in to become visible, which is normal, expected
+// clustering behavior rather than a display accuracy problem.
+const JITTER_DEGREES = 0.00002;
 // The golden angle — the standard increment for spacing N points around a
 // spiral (Vogel's model / sunflower phyllotaxis), giving close-to-optimal,
 // evenly-spaced packing with a real minimum-gap guarantee between any two
