@@ -112,16 +112,28 @@ export function SightingsMap({
   // the region to stop changing for a brief moment means only the final,
   // settled region actually triggers a re-cluster.
   const regionChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // See handleClusterPress: a fallback for when animateToRegion's real
+  // onRegionChangeComplete never shows up at all. Cleared as soon as a real
+  // event arrives, so it only ever fires as a last resort.
+  const clusterPressFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (regionChangeTimeoutRef.current) {
         clearTimeout(regionChangeTimeoutRef.current);
       }
+      if (clusterPressFallbackRef.current) {
+        clearTimeout(clusterPressFallbackRef.current);
+      }
     };
   }, []);
 
   const handleRegionChangeComplete = useCallback((region: Region) => {
+    // A real event arrived -- no need for the optimistic fallback below.
+    if (clusterPressFallbackRef.current) {
+      clearTimeout(clusterPressFallbackRef.current);
+      clusterPressFallbackRef.current = null;
+    }
     if (regionChangeTimeoutRef.current) {
       clearTimeout(regionChangeTimeoutRef.current);
     }
@@ -225,7 +237,23 @@ export function SightingsMap({
           `cluster:press:region rawExpansionZoom=${rawExpansionZoom} delta=${delta} region=${JSON.stringify(region)}`,
         );
         mapRef.current?.animateToRegion(region, 300);
-        setVisibleRegion(region);
+        // Deliberately NOT setting visibleRegion here. Breadcrumb evidence
+        // showed animateToRegion frequently can't actually reach these tight,
+        // zoomed-in deltas -- MapKit settles further out and fires a real
+        // onRegionChangeComplete reporting that looser region, sometimes over
+        // a second later. Asserting our own guessed region immediately, only
+        // to have the real event override it moments after, produced a
+        // visible expand -> collapse -> re-expand flicker: markers (including
+        // ones with an open Callout) got unmounted and remounted 2-3 times
+        // per tap. Letting the real event always win avoids that; the
+        // fallback below only fires if no real event shows up at all.
+        if (clusterPressFallbackRef.current) {
+          clearTimeout(clusterPressFallbackRef.current);
+        }
+        clusterPressFallbackRef.current = setTimeout(() => {
+          clusterPressFallbackRef.current = null;
+          setVisibleRegion(region);
+        }, 500);
       } catch (error) {
         recordBreadcrumb(`cluster:press:error id=${clusterId} error=${error}`);
       }
