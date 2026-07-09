@@ -137,7 +137,13 @@ export function SightingsMap({
           Math.abs(region.longitude - current.longitude) > current.longitudeDelta * 0.1;
         return zoomChanged || latMoved || lngMoved ? region : current;
       });
-    }, 200);
+      // 350ms rather than 200ms: a reported crash following a fast zoom-in
+      // right after a zoom-out still happened with 200ms, even though the
+      // debounce was correctly spacing distinct commits about a second
+      // apart by that point — so this alone probably isn't the full fix,
+      // but a bit more settling time between opposite-direction gesture
+      // sequences is cheap or free from a UX standpoint.
+    }, 350);
   }, []);
 
   const clusterIndex = useMemo(() => {
