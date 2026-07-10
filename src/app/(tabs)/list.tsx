@@ -1,10 +1,10 @@
 import * as Location from 'expo-location';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Image, Modal, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DateFilterButton } from '@/components/date-filter-button';
+import { FilterMenuButton } from '@/components/filter-menu-button';
 import { LogoutButton } from '@/components/logout-button';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,16 +13,21 @@ import { useLocationLabel } from '@/hooks/use-location-label';
 import { usePendingSightingsCount } from '@/hooks/use-pending-count';
 import { usePhotoViewer } from '@/hooks/use-photo-viewer';
 import { recordBreadcrumb } from '@/lib/breadcrumbs';
-import { matchesDateFilter, type DateFilter } from '@/lib/date-filter';
+import { DATE_FILTER_OPTIONS, matchesDateFilter, type DateFilter } from '@/lib/date-filter';
 import { distanceInMiles, formatDistanceMiles } from '@/lib/distance';
+import { DISTANCE_FILTER_OPTIONS, matchesDistanceFilter, type DistanceFilter } from '@/lib/distance-filter';
 import { formatSightingExtras } from '@/lib/sighting-options';
 import { formatRelativeTime } from '@/lib/sighting-time';
+import { SORT_OPTIONS, type SortOption } from '@/lib/sort-option';
+import { getCachedSpecies, setCachedSpecies } from '@/lib/species-cache';
 import { supabase } from '@/lib/supabase';
 import type { Sighting } from '@/types/sighting';
+import type { Species } from '@/types/species';
 
 // Clears the height of the top filter bar so the logout button doesn't
-// overlap it.
-const LOGOUT_BUTTON_OFFSET = 40;
+// overlap it. Taller than before (was 40) since the filter bar can now wrap
+// to two rows (Sort, Distance/Date, and Species buttons together).
+const LOGOUT_BUTTON_OFFSET = 76;
 
 export default function ListScreen() {
   const [sightings, setSightings] = useState<Sighting[]>([]);
@@ -30,7 +35,15 @@ export default function ListScreen() {
     null,
   );
   const [selectedSighting, setSelectedSighting] = useState<Sighting | null>(null);
+  // Nearest-first by default with a 25mi radius, so a new user sees
+  // relevant nearby recent activity rather than every sighting ever logged
+  // (this table can grow to many users' worth of history). Most Recent
+  // falls back to the previous default (date range, "All Time").
+  const [sortOption, setSortOption] = useState<SortOption>('nearest');
+  const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('25');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [speciesId, setSpeciesId] = useState<number | null>(null);
+  const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const pendingCount = usePendingSightingsCount();
   const { openPhoto } = usePhotoViewer();
 
@@ -42,9 +55,15 @@ export default function ListScreen() {
       supabase
         .from('sightings')
         .select(
-          'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(common_name)',
+          'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(id, common_name)',
         )
         .order('sighted_at', { ascending: false })
+        // Defensive cap, matching the Map screen's fetch -- rendering an
+        // unbounded number of rows gets expensive as the table grows across
+        // many users. Sort/distance/date/species filters do the real work
+        // of narrowing this down to what's relevant; this just bounds the
+        // worst case.
+        .limit(500)
         .then(({ data }) => {
           setSightings((data ?? []) as unknown as Sighting[]);
           recordBreadcrumb(`list:focus:fetch:success count=${data?.length ?? 0}`);
@@ -52,8 +71,31 @@ export default function ListScreen() {
     }, []),
   );
 
-  // Used only for the "rough distance away" hint on each row — if permission
-  // is denied or location can't be resolved, rows just omit the distance.
+  // Show whatever species list is cached from the last successful fetch
+  // right away, then refresh it from Supabase -- same pattern as the
+  // species picker on the Log Sighting screen.
+  useEffect(() => {
+    getCachedSpecies().then(setSpeciesList);
+
+    supabase
+      .from('species')
+      .select('id, common_name')
+      .order('sort_order')
+      .then(
+        ({ data }) => {
+          if (data) {
+            setSpeciesList(data as Species[]);
+            setCachedSpecies(data as Species[]);
+          }
+        },
+        () => {},
+      );
+  }, []);
+
+  // Used for both the "rough distance away" hint on each row and Nearest
+  // sorting/the distance filter — if permission is denied or location can't
+  // be resolved, rows just omit the distance and Nearest sort falls back to
+  // the fetch's existing most-recent-first order until it resolves.
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -68,15 +110,63 @@ export default function ListScreen() {
     })().catch(() => {});
   }, []);
 
-  const filteredSightings = sightings.filter((sighting) =>
-    matchesDateFilter(sighting.sighted_at, dateFilter),
+  const visibleSightings = useMemo(() => {
+    const speciesMatched =
+      speciesId === null ? sightings : sightings.filter((s) => s.species?.id === speciesId);
+
+    if (sortOption === 'recent') {
+      // Already ordered most-recent-first by the query; filtering preserves
+      // that order.
+      return speciesMatched.filter((s) => matchesDateFilter(s.sighted_at, dateFilter));
+    }
+
+    // Nearest: without a resolved location there's nothing to sort or
+    // filter by distance yet, so just show the (recency-ordered) matches
+    // rather than an empty list.
+    if (!userLocation) {
+      return speciesMatched;
+    }
+    return speciesMatched
+      .map((sighting) => ({ sighting, distanceMiles: distanceInMiles(userLocation, sighting) }))
+      .filter(({ distanceMiles }) => matchesDistanceFilter(distanceMiles, distanceFilter))
+      .sort((a, b) => a.distanceMiles - b.distanceMiles)
+      .map(({ sighting }) => sighting);
+  }, [sightings, sortOption, dateFilter, distanceFilter, speciesId, userLocation]);
+
+  const speciesOptions = useMemo(
+    () => [
+      { value: null as number | null, label: 'All Species' },
+      ...speciesList.map((species) => ({ value: species.id as number | null, label: species.common_name })),
+    ],
+    [speciesList],
   );
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.filterBarContainer}>
-          <DateFilterButton value={dateFilter} onChange={setDateFilter} />
+          <FilterMenuButton label="Sort" options={SORT_OPTIONS} value={sortOption} onChange={setSortOption} />
+          {sortOption === 'nearest' ? (
+            <FilterMenuButton
+              label="Distance"
+              options={DISTANCE_FILTER_OPTIONS}
+              value={distanceFilter}
+              onChange={setDistanceFilter}
+            />
+          ) : (
+            <FilterMenuButton
+              label="Filter"
+              options={DATE_FILTER_OPTIONS}
+              value={dateFilter}
+              onChange={setDateFilter}
+            />
+          )}
+          <FilterMenuButton
+            label="Species"
+            options={speciesOptions}
+            value={speciesId}
+            onChange={setSpeciesId}
+          />
         </ThemedView>
         {pendingCount > 0 ? (
           <ThemedView type="backgroundElement" style={styles.pendingBanner}>
@@ -86,7 +176,7 @@ export default function ListScreen() {
           </ThemedView>
         ) : null}
         <FlatList
-          data={filteredSightings}
+          data={visibleSightings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -96,7 +186,9 @@ export default function ListScreen() {
               </ThemedText>
               <ThemedText type="subtitle">Recent Sightings</ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.centerText}>
-                {dateFilter === 'all' ? 'No sightings yet.' : 'No sightings in this time range.'}
+                {sortOption === 'recent' && dateFilter === 'all' && speciesId === null
+                  ? 'No sightings yet.'
+                  : 'No sightings match your filters.'}
               </ThemedText>
             </ThemedView>
           }
@@ -248,6 +340,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   filterBarContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
   },

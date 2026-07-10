@@ -52,7 +52,7 @@ export default function MapScreen() {
         supabase
           .from('sightings')
           .select(
-            'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(common_name)',
+            'id, latitude, longitude, sighted_at, notes, photo_url, location_type, distance_estimate, species(id, common_name)',
           )
           .order('sighted_at', { ascending: false })
           // Defensive cap: rendering/clustering an unbounded number of pins
